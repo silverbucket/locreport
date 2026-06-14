@@ -28,7 +28,9 @@ const TABLE_COLS = [
   ["countedCode", "Total"],
   ["excluded", "Excl."],
 ];
-const MAX_PKG_SERIES = 14; // group the long tail into "Other" beyond this
+// Show every package individually up to this many; only collapse the tail into
+// "Other" for genuinely large monorepos (keeps the legend/stack readable).
+const MAX_PKG_SERIES = 30;
 
 let chart = null;
 let report = null;
