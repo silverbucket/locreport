@@ -38,6 +38,7 @@
           <div class="segmented" role="tablist">
             <button id="view-role" class="seg active" type="button">By role</button>
             <button id="view-pkg" class="seg" type="button">By package</button>
+            <button id="view-age" class="seg" type="button" title="Surviving lines by year authored (runs git blame)">Code age</button>
           </div>
           <label id="metric-wrap" class="metric" hidden>
             Metric
@@ -73,6 +74,10 @@
         <section id="packages" hidden>
           <h2>Per package <span id="pkg-date" class="muted"></span></h2>
           <div id="pkg-table" class="table-wrap"></div>
+        </section>
+        <section id="age-tables" hidden>
+          <h2>Code age <span id="age-date" class="muted"></span></h2>
+          <div id="age-table" class="table-wrap"></div>
         </section>
       </section>
     </main>

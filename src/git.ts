@@ -111,6 +111,39 @@ export async function commitAtOrBefore(gitDir: string, branch: string, isoDate: 
   return out || null;
 }
 
+/** List all file paths tracked at `sha` (repo-relative, POSIX). */
+export async function listTreeFiles(gitDir: string, sha: string): Promise<string[]> {
+  const out = await git(["--git-dir", gitDir, "ls-tree", "-r", "--name-only", sha], {
+    maxBuffer: 64 * 1024 * 1024,
+  });
+  return out.split("\n").filter((l) => l.length > 0);
+}
+
+/**
+ * Blame `path` at `sha` and return a map of author-year -> line count. Returns
+ * an empty map if the file can't be blamed (binary, submodule, gone, etc.).
+ */
+export async function blameFileYears(gitDir: string, sha: string, path: string): Promise<Map<number, number>> {
+  const years = new Map<number, number>();
+  try {
+    const out = await git(["--git-dir", gitDir, "blame", "--line-porcelain", sha, "--", path], {
+      maxBuffer: 256 * 1024 * 1024,
+    });
+    for (const line of out.split("\n")) {
+      if (line.startsWith("author-time ")) {
+        const epoch = Number(line.slice("author-time ".length).trim());
+        if (Number.isFinite(epoch)) {
+          const year = new Date(epoch * 1000).getUTCFullYear();
+          years.set(year, (years.get(year) ?? 0) + 1);
+        }
+      }
+    }
+  } catch {
+    // Unblameable file — skip it.
+  }
+  return years;
+}
+
 /** Extract the tree of `sha` into `destDir` (which should already exist). */
 export async function extractCommit(gitDir: string, sha: string, tarPath: string, destDir: string): Promise<void> {
   await git(["--git-dir", gitDir, "archive", "--format=tar", "-o", tarPath, sha]);

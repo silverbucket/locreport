@@ -4,6 +4,7 @@ import { cpus, tmpdir } from "node:os";
 import path from "node:path";
 import { aggregateByPackage, aggregateByRole, classifyFiles } from "./aggregate.js";
 import { openCache, type AnalysisCache } from "./cache.js";
+import { computeCohort } from "./cohort.js";
 import { detectPackages } from "./packages.js";
 import { getCounter, type Counter } from "./counter.js";
 import { parseGitHubRepo } from "./github.js";
@@ -21,6 +22,8 @@ export interface AnalyzeOptions {
   counter?: Counter;
   /** Also compute a per-package breakdown (monorepo support). */
   byPackage?: boolean;
+  /** Also compute the code-age cohort (git blame per snapshot — slower). */
+  cohort?: boolean;
   /** Use the on-disk cache (persistent clone + per-commit counts). Default true. */
   cache?: boolean;
   /** Reject repos whose bare size exceeds this many MB (server-side guard). */
@@ -37,7 +40,8 @@ export type ProgressEvent =
   | { type: "cloning"; repo: string }
   | { type: "updating"; repo: string }
   | { type: "resolved"; branch: string; counter: string; snapshots: number; cached: number }
-  | { type: "snapshot"; index: number; total: number; date: string; sha: string; cached: boolean };
+  | { type: "snapshot"; index: number; total: number; date: string; sha: string; cached: boolean }
+  | { type: "cohort"; index: number; total: number; date: string; cached: boolean };
 
 /**
  * Analyze a GitHub repo's LOC over time, split by role.
@@ -146,9 +150,32 @@ export async function analyzeBareRepo(
     emit(sha, false);
   });
 
+  // Optional code-age cohort: blame each unique commit (cached per sha). This is
+  // the heavy phase, so it runs only on request and reuses the disk cache.
+  const cohortBySha = new Map<string, Record<string, number>>();
+  if (options.cohort) {
+    let ci = 0;
+    for (const sha of uniqueShas) {
+      let cohort = store ? await store.getCohort(sha) : null;
+      const wasCached = cohort !== null;
+      if (!cohort) {
+        cohort = await computeCohort(gitDir, sha);
+        if (store) await store.setCohort(sha, cohort);
+      }
+      cohortBySha.set(sha, cohort.byYear);
+      options.onProgress?.({ type: "cohort", index: ++ci, total, date: firstDate.get(sha)!, cached: wasCached });
+    }
+  }
+
   const snapshots: Snapshot[] = points.map((p) => {
     const c = counts.get(p.sha)!;
-    return { date: p.date, sha: p.sha, byRole: c.byRole, byPackage: c.byPackage };
+    return {
+      date: p.date,
+      sha: p.sha,
+      byRole: c.byRole,
+      byPackage: c.byPackage,
+      cohortByYear: cohortBySha.get(p.sha),
+    };
   });
 
   return {

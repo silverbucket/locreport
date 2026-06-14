@@ -186,6 +186,29 @@ describe("analyzeBareRepo (end-to-end, builtin counter)", () => {
     expect(last.byPackage!.length).toBeGreaterThan(0);
   });
 
+  it("computes a code-age cohort that buckets lines by author-year", async () => {
+    const meta = { repoUrl: "https://github.com/test/repo", cloneUrl: "https://github.com/test/repo.git" };
+    const report = await analyzeBareRepo(gitDir, workRoot, meta, {
+      interval: "1y",
+      counter: new BuiltinCounter(),
+      cohort: true,
+    });
+
+    const first = report.snapshots[0]!; // 2021 commit
+    const last = report.snapshots[report.snapshots.length - 1]!; // 2023 commit
+
+    // The first snapshot only contains lines authored in 2021.
+    expect(Object.keys(first.cohortByYear ?? {})).toEqual(["2021"]);
+
+    // The latest snapshot has surviving lines from all three commit years.
+    const years = Object.keys(last.cohortByYear ?? {}).sort();
+    expect(years).toEqual(["2021", "2022", "2023"]);
+
+    const totalLast = Object.values(last.cohortByYear!).reduce((a, b) => a + b, 0);
+    const totalFirst = Object.values(first.cohortByYear!).reduce((a, b) => a + b, 0);
+    expect(totalLast).toBeGreaterThan(totalFirst);
+  });
+
   it("caches per-commit counts so a re-run does no counting", async () => {
     const cacheDir = await mkdtemp(path.join(tmpdir(), "locreport-cachetest-"));
     const store = openCache(cacheDir);

@@ -34,9 +34,11 @@ const MAX_PKG_SERIES = 30;
 
 let chart = null;
 let report = null;
-let view = "role"; // "role" | "pkg"
+let view = "role"; // "role" | "pkg" | "age"
 let metric = "app";
 let stacked = true;
+
+const hasCohort = () => report && report.snapshots.some((s) => s.cohortByYear);
 
 /** Reduce a role->bucket map to headline numbers (mirrors src/report.ts). */
 function summarize(byRole) {
@@ -103,6 +105,23 @@ function packageRows() {
   return ((last && last.byPackage) || []).map((p) => ({ pkg: p.name || "(root)", ...summarize(p.byRole) }));
 }
 
+/** Latest-snapshot code-age table HTML, or "" if no cohort data. */
+function ageTableHtml() {
+  const last = report.snapshots[report.snapshots.length - 1];
+  const byYear = (last && last.cohortByYear) || {};
+  const years = Object.keys(byYear).sort();
+  if (!years.length) return "";
+  const total = years.reduce((s, y) => s + byYear[y], 0);
+  const head = "<thead><tr><th>Year</th><th>Lines</th><th>Share</th></tr></thead>";
+  const body = years
+    .map((y) => {
+      const pct = total ? ((byYear[y] / total) * 100).toFixed(1) : "0.0";
+      return `<tr><td>${esc(y)}</td><td>${n(byYear[y])}</td><td>${pct}%</td></tr>`;
+    })
+    .join("");
+  return `<table>${head}<tbody>${body}</tbody></table>`;
+}
+
 function renderTables() {
   $("table").innerHTML = table(intervalRows(), "Date", "date");
   const pkgRows = packageRows();
@@ -111,8 +130,14 @@ function renderTables() {
     $("pkg-table").innerHTML = table(pkgRows, "Package", "pkg");
     $("pkg-date").textContent = `(latest snapshot: ${last.date})`;
   }
+  const ageHtml = ageTableHtml();
+  if (ageHtml) {
+    $("age-table").innerHTML = ageHtml;
+    $("age-date").textContent = `(latest snapshot: ${report.snapshots[report.snapshots.length - 1].date})`;
+  }
   $("role-tables").hidden = view !== "role";
   $("packages").hidden = view !== "pkg" || !pkgRows.length;
+  $("age-tables").hidden = view !== "age" || !ageHtml;
 }
 
 // ---------------------------------------------------------------------------
@@ -199,8 +224,45 @@ function drawChart(labels, datasets, yTitle) {
   chart = new Chart($("chart"), cfg);
 }
 
+// Cohort: one series per author-year, value = surviving lines of that cohort at
+// each snapshot. Older years sort to the bottom of the stack.
+function cohortSeries() {
+  const yearSet = new Set();
+  for (const s of report.snapshots) for (const y of Object.keys(s.cohortByYear || {})) yearSet.add(y);
+  const years = [...yearSet].sort();
+  return years.map((y) => ({
+    year: y,
+    values: report.snapshots.map((s) => (s.cohortByYear ? s.cohortByYear[y] || 0 : 0)),
+  }));
+}
+
+function ageColor(i, total) {
+  // Sequential blue (old) -> red (new).
+  const hue = 210 - (total > 1 ? (i / (total - 1)) * 190 : 0);
+  return { border: `hsl(${hue} 65% 55%)`, fill: `hsl(${hue} 65% 55% / 0.8)` };
+}
+
 function renderChart() {
   const labels = report.snapshots.map((s) => s.date);
+
+  if (view === "age") {
+    const series = cohortSeries();
+    const datasets = series.map((s, i) => {
+      const color = ageColor(i, series.length);
+      return {
+        label: s.year,
+        data: s.values.map((v) => (v > 0 ? v : null)),
+        backgroundColor: color.fill,
+        borderColor: color.border,
+        borderWidth: stacked ? 1 : 2,
+        fill: stacked,
+        pointRadius: 0,
+        tension: 0.2,
+      };
+    });
+    drawChart(labels, datasets, "Surviving lines by year authored");
+    return;
+  }
 
   if (view === "role") {
     const summaries = report.snapshots.map((s) => summarize(s.byRole));
@@ -279,6 +341,12 @@ function exportCsv() {
   if (!report) return;
   if (view === "pkg") {
     download(`locreport-${repoSlug()}-packages.csv`, toCsv(packageRows(), "Package", "pkg"), "text/csv");
+  } else if (view === "age") {
+    const last = report.snapshots[report.snapshots.length - 1];
+    const byYear = (last && last.cohortByYear) || {};
+    const lines = ["Year,Lines"];
+    for (const y of Object.keys(byYear).sort()) lines.push(`${y},${byYear[y]}`);
+    download(`locreport-${repoSlug()}-codeage.csv`, lines.join("\n"), "text/csv");
   } else {
     download(`locreport-${repoSlug()}.csv`, toCsv(intervalRows(), "Date", "date"), "text/csv");
   }
@@ -309,13 +377,21 @@ function setView(next) {
   view = next;
   $("view-role").classList.toggle("active", view === "role");
   $("view-pkg").classList.toggle("active", view === "pkg");
+  $("view-age").classList.toggle("active", view === "age");
   $("metric-wrap").hidden = view !== "pkg";
-  if (report) render();
   syncUrl();
+  if (!report) return;
+  // Code age needs a (slower) blame pass; fetch it lazily the first time.
+  if (view === "age" && !hasCohort()) {
+    runAnalysis();
+    return;
+  }
+  render();
 }
 
 $("view-role").addEventListener("click", () => setView("role"));
 $("view-pkg").addEventListener("click", () => setView("pkg"));
+$("view-age").addEventListener("click", () => setView("age"));
 $("metric").addEventListener("change", (e) => {
   metric = e.target.value;
   if (report && view === "pkg") renderChart();
@@ -342,6 +418,7 @@ function runAnalysis() {
 
   syncUrl();
   const params = new URLSearchParams({ repo: repoInput, interval: $("interval").value });
+  if (view === "age") params.set("cohort", "1");
 
   $("go").disabled = true;
   $("results").hidden = true;
@@ -357,6 +434,8 @@ function runAnalysis() {
       setStatus(`Branch ${p.branch} · counter "${p.counter}" · ${p.snapshots} snapshots${p.cached ? ` (${p.cached} cached)` : ""}…`);
     else if (p.type === "snapshot")
       setStatus(`Analyzing ${p.index}/${p.total} — ${p.date}${p.cached ? " (cached)" : ""}…`);
+    else if (p.type === "cohort")
+      setStatus(`Computing code age (git blame) ${p.index}/${p.total} — ${p.date}${p.cached ? " (cached)" : ""}…`);
   });
 
   es.addEventListener("done", (e) => {
@@ -402,5 +481,6 @@ $("form").addEventListener("submit", (ev) => {
     $("stacked").checked = false;
   }
   if (q.get("view") === "pkg") setView("pkg");
+  else if (q.get("view") === "age") setView("age");
   if (repo) runAnalysis();
 })();

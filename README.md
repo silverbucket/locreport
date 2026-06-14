@@ -50,7 +50,20 @@ Accepts `owner/repo`, `https://github.com/owner/repo[.git]`, or
 `git@github.com:owner/repo.git`. **Only github.com is accepted** (this also acts
 as an SSRF guard, since the tool clones whatever it's given).
 
-Options: `--interval 1m|3m|6m|1y`, `--branch <name>`, `--by-package`, `--json`.
+Options: `--interval 1m|3m|6m|1y`, `--branch <name>`, `--by-package`, `--cohort`,
+`--no-cache`, `--json`.
+
+### Code age (`--cohort`)
+
+```bash
+npx tsx src/cli.ts sindresorhus/slugify --cohort
+```
+
+Groups each snapshot's **surviving lines by the year they were authored**
+(theseus-style), via `git blame`. The CLI prints the latest snapshot's age
+breakdown; the web UI's **Code age** tab renders it as a stacked area over time
+(total height = codebase size, bands = year-added cohorts). It's the heaviest
+analysis (a blame pass per commit), so it's opt-in and cached per commit.
 
 ### Monorepos (`--by-package`)
 

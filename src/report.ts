@@ -127,3 +127,32 @@ export function formatPackages(report: Report): string {
 
   return [`Per-package breakdown (latest snapshot: ${last.date}):`, "", header, sep, body].join("\n");
 }
+
+/**
+ * Render the code-age cohort for the latest snapshot: surviving lines grouped by
+ * the year they were authored. Empty string if no cohort data.
+ */
+export function formatCohort(report: Report): string {
+  const last = report.snapshots[report.snapshots.length - 1];
+  const byYear = last?.cohortByYear;
+  if (!byYear || Object.keys(byYear).length === 0) return "";
+
+  const years = Object.keys(byYear).sort();
+  const total = years.reduce((s, y) => s + byYear[y]!, 0);
+  const yearW = Math.max(4, ...years.map((y) => y.length));
+  const numW = Math.max(5, ...years.map((y) => byYear[y]!.toLocaleString("en-US").length));
+
+  const rows = years.map((y) => {
+    const lines = byYear[y]!;
+    const pct = total ? ((lines / total) * 100).toFixed(1) : "0.0";
+    return `${y.padEnd(yearW)}  ${lines.toLocaleString("en-US").padStart(numW)}  ${pct.padStart(5)}%`;
+  });
+
+  return [
+    `Code age (latest snapshot: ${last.date}) — ${total.toLocaleString("en-US")} surviving lines:`,
+    "",
+    `${"Year".padEnd(yearW)}  ${"Lines".padStart(numW)}  Share`,
+    `${"-".repeat(yearW)}  ${"-".repeat(numW)}  -----`,
+    ...rows,
+  ].join("\n");
+}

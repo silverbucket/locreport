@@ -64,6 +64,8 @@ export interface Snapshot {
   byRole: Record<Role, Bucket>;
   /** Per-package breakdown (present only when package analysis is enabled). */
   byPackage?: PackageSnapshot[];
+  /** Surviving lines grouped by author-year (present only when cohort enabled). */
+  cohortByYear?: Record<string, number>;
 }
 
 /** Full report across all sampled snapshots. */

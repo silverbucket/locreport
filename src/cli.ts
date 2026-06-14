@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import { analyzeRepo } from "./analyze.js";
 import { isInterval, INTERVALS } from "./intervals.js";
-import { formatPackages, formatReport } from "./report.js";
+import { formatCohort, formatPackages, formatReport } from "./report.js";
 import type { Interval } from "./types.js";
 
 interface Args {
@@ -10,11 +10,12 @@ interface Args {
   branch?: string;
   json: boolean;
   byPackage: boolean;
+  cohort: boolean;
   cache: boolean;
 }
 
 function parseArgs(argv: string[]): Args {
-  const args: Args = { interval: "1y", json: false, byPackage: false, cache: true };
+  const args: Args = { interval: "1y", json: false, byPackage: false, cohort: false, cache: true };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i]!;
     if (a === "--interval" || a === "-i") {
@@ -27,6 +28,8 @@ function parseArgs(argv: string[]): Args {
       args.json = true;
     } else if (a === "--by-package" || a === "-p") {
       args.byPackage = true;
+    } else if (a === "--cohort") {
+      args.cohort = true;
     } else if (a === "--no-cache") {
       args.cache = false;
     } else if (a === "--help" || a === "-h") {
@@ -56,6 +59,7 @@ Options:
   -i, --interval    sampling interval (default 1y)
   -b, --branch      branch to analyze (default: repo default)
   -p, --by-package  also break down per package (monorepo workspaces)
+      --cohort      also compute code-age (lines by year added; slower)
       --no-cache    skip the on-disk cache (fresh clone, no reuse)
       --json        emit full JSON (includes per-snapshot package history)
 
@@ -82,6 +86,7 @@ async function main(): Promise<void> {
     interval: args.interval,
     branch: args.branch,
     byPackage: args.byPackage,
+    cohort: args.cohort,
     cache: args.cache,
     onProgress: (e) => {
       if (args.json) return; // keep stdout clean for JSON
@@ -92,6 +97,8 @@ async function main(): Promise<void> {
         process.stderr.write(`Branch ${e.branch}, counter "${e.counter}", ${e.snapshots} snapshots${cached}.\n`);
       } else if (e.type === "snapshot")
         process.stderr.write(`  [${e.index}/${e.total}] ${e.date} ${e.sha.slice(0, 8)}${e.cached ? " (cached)" : ""}\n`);
+      else if (e.type === "cohort")
+        process.stderr.write(`  blame [${e.index}/${e.total}] ${e.date}${e.cached ? " (cached)" : ""}\n`);
     },
   });
 
@@ -104,6 +111,10 @@ async function main(): Promise<void> {
   if (args.byPackage) {
     const pkgs = formatPackages(report);
     process.stdout.write(pkgs ? "\n" + pkgs + "\n" : "\n(No packages detected — single-package repo.)\n");
+  }
+  if (args.cohort) {
+    const cohort = formatCohort(report);
+    if (cohort) process.stdout.write("\n" + cohort + "\n");
   }
 }
 

@@ -1,6 +1,7 @@
 import { access, mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import path from "node:path";
+import type { CohortResult } from "./cohort.js";
 import { cloneBare, fetchBare } from "./git.js";
 import type { GitHubRepo } from "./github.js";
 import type { CommitCounts } from "./types.js";
@@ -39,12 +40,19 @@ interface SnapshotFile {
   counts: CommitCounts;
 }
 
+interface CohortFile {
+  v: number;
+  cohort: CohortResult;
+}
+
 export interface AnalysisCache {
   readonly root: string;
   /** Ensure a fresh-enough bare clone exists for `repo`; returns its git dir. */
   ensureRepo(repo: GitHubRepo, onClone?: () => void, onFetch?: () => void): Promise<string>;
   getSnapshot(counter: string, sha: string): Promise<CommitCounts | null>;
   setSnapshot(counter: string, sha: string, counts: CommitCounts): Promise<void>;
+  getCohort(sha: string): Promise<CohortResult | null>;
+  setCohort(sha: string, cohort: CohortResult): Promise<void>;
 }
 
 class DiskCache implements AnalysisCache {
@@ -63,6 +71,17 @@ class DiskCache implements AnalysisCache {
   private snapshotPath(counter: string, sha: string): string {
     const safeCounter = counter.replace(/[^A-Za-z0-9_.-]/g, "_");
     return path.join(this.root, "snapshots", safeCounter, `${sha}.json`);
+  }
+
+  private cohortPath(sha: string): string {
+    return path.join(this.root, "cohorts", `${sha}.json`);
+  }
+
+  private async writeAtomic(file: string, payload: unknown): Promise<void> {
+    await mkdir(path.dirname(file), { recursive: true });
+    const tmp = `${file}.${process.pid}.tmp`;
+    await writeFile(tmp, JSON.stringify(payload));
+    await rename(tmp, file);
   }
 
   async ensureRepo(repo: GitHubRepo, onClone?: () => void, onFetch?: () => void): Promise<string> {
@@ -90,13 +109,22 @@ class DiskCache implements AnalysisCache {
   }
 
   async setSnapshot(counter: string, sha: string, counts: CommitCounts): Promise<void> {
-    const file = this.snapshotPath(counter, sha);
-    await mkdir(path.dirname(file), { recursive: true });
     const payload: SnapshotFile = { v: CACHE_VERSION, counts };
-    // Write-then-rename so a crash can't leave a half-written cache file.
-    const tmp = `${file}.${process.pid}.tmp`;
-    await writeFile(tmp, JSON.stringify(payload));
-    await rename(tmp, file);
+    await this.writeAtomic(this.snapshotPath(counter, sha), payload);
+  }
+
+  async getCohort(sha: string): Promise<CohortResult | null> {
+    try {
+      const parsed = JSON.parse(await readFile(this.cohortPath(sha), "utf8")) as CohortFile;
+      if (parsed.v !== CACHE_VERSION || !parsed.cohort) return null;
+      return parsed.cohort;
+    } catch {
+      return null;
+    }
+  }
+
+  async setCohort(sha: string, cohort: CohortResult): Promise<void> {
+    await this.writeAtomic(this.cohortPath(sha), { v: CACHE_VERSION, cohort } satisfies CohortFile);
   }
 }
 

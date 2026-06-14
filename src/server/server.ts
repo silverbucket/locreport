@@ -61,6 +61,7 @@ async function handleAnalyze(req: IncomingMessage, res: ServerResponse, url: URL
   // The web UI always wants per-package data so the "By package" view works
   // without a re-run; opt out only with an explicit byPackage=0.
   const byPackage = (url.searchParams.get("byPackage") ?? "1") !== "0";
+  const cohort = ["1", "true", "yes"].includes((url.searchParams.get("cohort") ?? "").toLowerCase());
   const branch = url.searchParams.get("branch")?.trim() || undefined;
 
   res.writeHead(200, {
@@ -107,6 +108,7 @@ async function handleAnalyze(req: IncomingMessage, res: ServerResponse, url: URL
         interval,
         branch,
         byPackage,
+        cohort,
         maxRepoMb: gate.limits.maxRepoMb,
         onProgress: (e) => {
           if (!closed) sse(res, "progress", e);
