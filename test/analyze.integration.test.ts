@@ -4,8 +4,21 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { analyzeBareRepo } from "../src/analyze.js";
-import { BuiltinCounter } from "../src/counter.js";
+import { openCache } from "../src/cache.js";
+import { BuiltinCounter, type Counter } from "../src/counter.js";
 import { summarizeSnapshot } from "../src/report.js";
+import type { FileCount } from "../src/types.js";
+
+/** Wraps the builtin counter and records how many commits it actually counts. */
+class SpyCounter implements Counter {
+  readonly name = "builtin"; // must match builtin so cache keys align across runs
+  calls = 0;
+  private inner = new BuiltinCounter();
+  count(dir: string): Promise<FileCount[]> {
+    this.calls++;
+    return this.inner.count(dir);
+  }
+}
 
 /**
  * End-to-end test of the engine (git sampling + counting + classification +
@@ -171,6 +184,28 @@ describe("analyzeBareRepo (end-to-end, builtin counter)", () => {
     const last = report.snapshots[report.snapshots.length - 1]!;
     expect(last.byPackage).toBeDefined();
     expect(last.byPackage!.length).toBeGreaterThan(0);
+  });
+
+  it("caches per-commit counts so a re-run does no counting", async () => {
+    const cacheDir = await mkdtemp(path.join(tmpdir(), "locreport-cachetest-"));
+    const store = openCache(cacheDir);
+    const spy = new SpyCounter();
+    const meta = { repoUrl: "https://github.com/test/repo", cloneUrl: "https://github.com/test/repo.git" };
+    const opts = { interval: "1y" as const, counter: spy, store, byPackage: true };
+
+    try {
+      const first = await analyzeBareRepo(gitDir, workRoot, meta, opts);
+      expect(spy.calls).toBe(3); // three unique commits counted
+
+      const second = await analyzeBareRepo(gitDir, workRoot, meta, opts);
+      expect(spy.calls).toBe(3); // fully served from cache — no new counting
+
+      // Cached results match the freshly-counted ones.
+      expect(second.snapshots.map((s) => s.byRole.app.code)).toEqual(first.snapshots.map((s) => s.byRole.app.code));
+      expect(second.snapshots.at(-1)?.byPackage?.length).toBe(first.snapshots.at(-1)?.byPackage?.length);
+    } finally {
+      await rm(cacheDir, { recursive: true, force: true });
+    }
   });
 
   it("samples fewer snapshots at a coarser-than-history interval", async () => {

@@ -10,10 +10,11 @@ interface Args {
   branch?: string;
   json: boolean;
   byPackage: boolean;
+  cache: boolean;
 }
 
 function parseArgs(argv: string[]): Args {
-  const args: Args = { interval: "1y", json: false, byPackage: false };
+  const args: Args = { interval: "1y", json: false, byPackage: false, cache: true };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i]!;
     if (a === "--interval" || a === "-i") {
@@ -26,6 +27,8 @@ function parseArgs(argv: string[]): Args {
       args.json = true;
     } else if (a === "--by-package" || a === "-p") {
       args.byPackage = true;
+    } else if (a === "--no-cache") {
+      args.cache = false;
     } else if (a === "--help" || a === "-h") {
       args.url = undefined;
       return args;
@@ -53,9 +56,11 @@ Options:
   -i, --interval    sampling interval (default 1y)
   -b, --branch      branch to analyze (default: repo default)
   -p, --by-package  also break down per package (monorepo workspaces)
+      --no-cache    skip the on-disk cache (fresh clone, no reuse)
       --json        emit full JSON (includes per-snapshot package history)
 
 Roles: app, test, config, docs, data (counted) and build, vendored (excluded).
+Cache lives in ~/.cache/locreport (override with LOCREPORT_CACHE_DIR).
 `;
 
 async function main(): Promise<void> {
@@ -77,13 +82,16 @@ async function main(): Promise<void> {
     interval: args.interval,
     branch: args.branch,
     byPackage: args.byPackage,
+    cache: args.cache,
     onProgress: (e) => {
       if (args.json) return; // keep stdout clean for JSON
       if (e.type === "cloning") process.stderr.write(`Cloning ${e.repo}...\n`);
-      else if (e.type === "resolved")
-        process.stderr.write(`Branch ${e.branch}, counter "${e.counter}", ${e.snapshots} snapshots.\n`);
-      else if (e.type === "snapshot")
-        process.stderr.write(`  [${e.index}/${e.total}] ${e.date} ${e.sha.slice(0, 8)}\n`);
+      else if (e.type === "updating") process.stderr.write(`Updating cached clone of ${e.repo}...\n`);
+      else if (e.type === "resolved") {
+        const cached = e.cached > 0 ? ` (${e.cached} cached)` : "";
+        process.stderr.write(`Branch ${e.branch}, counter "${e.counter}", ${e.snapshots} snapshots${cached}.\n`);
+      } else if (e.type === "snapshot")
+        process.stderr.write(`  [${e.index}/${e.total}] ${e.date} ${e.sha.slice(0, 8)}${e.cached ? " (cached)" : ""}\n`);
     },
   });
 

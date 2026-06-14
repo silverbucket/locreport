@@ -33,6 +33,15 @@ export async function cloneBare(cloneUrl: string, gitDir: string): Promise<void>
   await git(["clone", "--bare", "--quiet", cloneUrl, gitDir]);
 }
 
+/**
+ * Update an existing bare clone's branch refs from origin. A bare clone's
+ * default fetch refspec maps refs/heads/* directly, so this brings in new
+ * commits on all branches. Cheap when already up to date.
+ */
+export async function fetchBare(gitDir: string): Promise<void> {
+  await git(["--git-dir", gitDir, "fetch", "--prune", "--quiet", "origin"]);
+}
+
 /** Resolve the default branch name of a bare clone (e.g. "main"). */
 export async function defaultBranch(gitDir: string): Promise<string> {
   try {

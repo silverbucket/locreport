@@ -47,6 +47,13 @@ export interface PackageSnapshot {
   byRole: Record<Role, Bucket>;
 }
 
+/** The counted result for a single commit (cache unit). */
+export interface CommitCounts {
+  byRole: Record<Role, Bucket>;
+  /** Present only when per-package analysis was computed for this commit. */
+  byPackage?: PackageSnapshot[];
+}
+
 /** Analysis result for a single point in time. */
 export interface Snapshot {
   /** ISO date (YYYY-MM-DD) of the interval boundary. */

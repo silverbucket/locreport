@@ -97,6 +97,24 @@ same engine as the CLI. Chart.js is self-hosted (no CDN), and the page runs unde
 a locked-down `default-src 'self'` CSP. Repo-controlled strings (package names)
 are HTML-escaped before rendering. No persistence yet — each analysis re-clones.
 
+## Caching & performance
+
+By default the engine caches aggressively, so re-runs are near-instant:
+
+- **Persistent clone** — each repo is bare-cloned once into the cache and
+  refreshed with `git fetch` on later runs instead of re-cloning.
+- **Per-commit counts** — a commit is immutable, so its counted result is cached
+  keyed by `(counter, sha)`. Switching interval reuses every commit already seen
+  (e.g. a yearly run warms the cache for a later monthly run).
+- **Parallel counting** — cache misses are counted concurrently (~CPU count).
+
+Example (vuejs/core, yearly): cold ~10s, warm ~2s (all commits cached).
+
+Cache lives in `~/.cache/locreport` (override with `LOCREPORT_CACHE_DIR`). Pass
+`--no-cache` for a one-off fresh clone with no reuse. Cache entries are versioned
+and auto-invalidated when counting/classification semantics change; to wipe it
+manually, delete the cache directory.
+
 ## Counting backend
 
 Two interchangeable backends behind one interface (`src/counter.ts`):
