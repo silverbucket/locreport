@@ -65,3 +65,51 @@ describe("countText", () => {
     expect(countText("", ts)).toEqual({ code: 0, comment: 0, blank: 0 });
   });
 });
+
+describe("countText — string-literal awareness", () => {
+  const go = detectLanguage("x.go")!;
+  const sh = detectLanguage("x.sh")!;
+
+  it("ignores // inside a double-quoted string", () => {
+    expect(countText('const u = "http://example.com";', ts)).toEqual({ code: 1, comment: 0, blank: 0 });
+  });
+
+  it("ignores block-comment tokens inside a string", () => {
+    expect(countText('const s = "/* not a comment */";', ts)).toEqual({ code: 1, comment: 0, blank: 0 });
+  });
+
+  it("ignores // inside single-quoted strings", () => {
+    expect(countText("const s = 'a // b';", ts)).toEqual({ code: 1, comment: 0, blank: 0 });
+  });
+
+  it("handles escaped quotes within a string", () => {
+    expect(countText('const s = "a\\"// still string";', ts)).toEqual({ code: 1, comment: 0, blank: 0 });
+  });
+
+  it("handles multi-line backtick template literals", () => {
+    const src = ["const t = `a // not", "/* nor */ this`;", "real();"].join("\n");
+    // lines 1-2 are one template literal (code); line 3 code
+    expect(countText(src, ts)).toEqual({ code: 3, comment: 0, blank: 0 });
+  });
+
+  it("still detects a real trailing comment after a string", () => {
+    expect(countText('f("a // b"); // real', ts)).toEqual({ code: 1, comment: 0, blank: 0 }); // code wins
+    expect(countText('// "x" is a string-looking comment', ts)).toEqual({ code: 0, comment: 1, blank: 0 });
+  });
+
+  it("ignores # inside Python strings, and treats triple-quoted blocks as code", () => {
+    expect(countText('x = "a # b"', py)).toEqual({ code: 1, comment: 0, blank: 0 });
+    const doc = ['"""', "module docs # not a comment", '"""', "x = 1"].join("\n");
+    expect(countText(doc, py)).toEqual({ code: 4, comment: 0, blank: 0 });
+  });
+
+  it("handles Go raw (backtick) strings", () => {
+    expect(countText("s := `a // b`", go)).toEqual({ code: 1, comment: 0, blank: 0 });
+  });
+
+  it("ignores # inside shell double quotes but a real # is a comment", () => {
+    expect(countText('echo "a # b"', sh)).toEqual({ code: 1, comment: 0, blank: 0 });
+    expect(countText("x=1 # set x", sh)).toEqual({ code: 1, comment: 0, blank: 0 });
+    expect(countText("# just a comment", sh)).toEqual({ code: 0, comment: 1, blank: 0 });
+  });
+});

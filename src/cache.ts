@@ -18,7 +18,8 @@ import type { CommitCounts } from "./types.js";
  * Bump CACHE_VERSION whenever the classifier ruleset or counting semantics
  * change, so stale snapshot entries are ignored.
  */
-const CACHE_VERSION = 1;
+// v2: string-literal-aware counting changed code/comment results.
+const CACHE_VERSION = 2;
 
 function defaultRoot(): string {
   return process.env.LOCREPORT_CACHE_DIR ?? path.join(homedir(), ".cache", "locreport");

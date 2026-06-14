@@ -1,11 +1,26 @@
-import type { Syntax } from "./linecount.js";
+import type { StringDelim, Syntax } from "./linecount.js";
 
 /**
- * Language detection by extension / filename, with each language's comment
- * syntax. This table is intentionally pragmatic: it covers the languages that
- * dominate real repos. Files whose language we can't identify are skipped by
- * the builtin counter (cloc, when present, covers far more).
+ * Language detection by extension / filename, with each language's comment +
+ * string syntax. This table is intentionally pragmatic: it covers the languages
+ * that dominate real repos. Files whose language we can't identify are skipped
+ * by the builtin counter (cloc, when present, covers far more).
  */
+
+// Common string-literal delimiters.
+const DQ: StringDelim = { open: '"', close: '"', escape: true, multiline: false };
+const SQ: StringDelim = { open: "'", close: "'", escape: true, multiline: false };
+const SQ_RAW: StringDelim = { open: "'", close: "'", escape: false, multiline: false };
+const BT_ESC: StringDelim = { open: "`", close: "`", escape: true, multiline: true }; // JS template
+const BT_RAW: StringDelim = { open: "`", close: "`", escape: false, multiline: true }; // Go raw
+const TDQ: StringDelim = { open: '"""', close: '"""', escape: true, multiline: true };
+const TSQ: StringDelim = { open: "'''", close: "'''", escape: true, multiline: true };
+
+const STR_DEFAULT = [DQ, SQ];
+const STR_JS = [DQ, SQ, BT_ESC];
+const STR_PY = [TDQ, TSQ, DQ, SQ];
+const STR_SHELL = [DQ, SQ_RAW];
+const STR_DQ_ONLY = [DQ]; // languages where ' isn't a string (lifetimes, quotes, char-in-ident)
 
 const C_STYLE: Pick<Syntax, "line" | "block"> = { line: ["//"], block: [["/*", "*/"]] };
 const HASH: Pick<Syntax, "line" | "block"> = { line: ["#"], block: [] };
@@ -13,19 +28,21 @@ const DASH_SQL: Pick<Syntax, "line" | "block"> = { line: ["--"], block: [["/*", 
 
 interface Lang extends Pick<Syntax, "line" | "block"> {
   name: string;
+  /** String delimiters; defaults to STR_DEFAULT when omitted. */
+  strings?: StringDelim[];
 }
 
 // Map of lowercase extension (without dot) -> language.
 const BY_EXT: Record<string, Lang> = {
   // C-family
-  js: { name: "JavaScript", ...C_STYLE },
-  mjs: { name: "JavaScript", ...C_STYLE },
-  cjs: { name: "JavaScript", ...C_STYLE },
-  jsx: { name: "JSX", ...C_STYLE },
-  ts: { name: "TypeScript", ...C_STYLE },
-  mts: { name: "TypeScript", ...C_STYLE },
-  cts: { name: "TypeScript", ...C_STYLE },
-  tsx: { name: "TSX", ...C_STYLE },
+  js: { name: "JavaScript", ...C_STYLE, strings: STR_JS },
+  mjs: { name: "JavaScript", ...C_STYLE, strings: STR_JS },
+  cjs: { name: "JavaScript", ...C_STYLE, strings: STR_JS },
+  jsx: { name: "JSX", ...C_STYLE, strings: STR_JS },
+  ts: { name: "TypeScript", ...C_STYLE, strings: STR_JS },
+  mts: { name: "TypeScript", ...C_STYLE, strings: STR_JS },
+  cts: { name: "TypeScript", ...C_STYLE, strings: STR_JS },
+  tsx: { name: "TSX", ...C_STYLE, strings: STR_JS },
   java: { name: "Java", ...C_STYLE },
   c: { name: "C", ...C_STYLE },
   h: { name: "C/C++ Header", ...C_STYLE },
@@ -35,8 +52,8 @@ const BY_EXT: Record<string, Lang> = {
   hpp: { name: "C++ Header", ...C_STYLE },
   hh: { name: "C++ Header", ...C_STYLE },
   cs: { name: "C#", ...C_STYLE },
-  go: { name: "Go", ...C_STYLE },
-  rs: { name: "Rust", ...C_STYLE },
+  go: { name: "Go", ...C_STYLE, strings: [DQ, SQ, BT_RAW] },
+  rs: { name: "Rust", ...C_STYLE, strings: STR_DQ_ONLY }, // ' is a lifetime, not a string
   swift: { name: "Swift", ...C_STYLE },
   kt: { name: "Kotlin", ...C_STYLE },
   kts: { name: "Kotlin", ...C_STYLE },
@@ -50,11 +67,11 @@ const BY_EXT: Record<string, Lang> = {
   zig: { name: "Zig", line: ["//"], block: [] },
 
   // Hash-comment family
-  py: { name: "Python", ...HASH },
+  py: { name: "Python", ...HASH, strings: STR_PY },
   rb: { name: "Ruby", line: ["#"], block: [["=begin", "=end"]] },
-  sh: { name: "Shell", ...HASH },
-  bash: { name: "Shell", ...HASH },
-  zsh: { name: "Shell", ...HASH },
+  sh: { name: "Shell", ...HASH, strings: STR_SHELL },
+  bash: { name: "Shell", ...HASH, strings: STR_SHELL },
+  zsh: { name: "Shell", ...HASH, strings: STR_SHELL },
   pl: { name: "Perl", line: ["#"], block: [["=pod", "=cut"]] },
   pm: { name: "Perl", line: ["#"], block: [["=pod", "=cut"]] },
   r: { name: "R", ...HASH },
@@ -77,17 +94,17 @@ const BY_EXT: Record<string, Lang> = {
   json5: { name: "JSON5", ...C_STYLE },
   jsonc: { name: "JSON5", ...C_STYLE },
 
-  // SQL family
-  sql: { name: "SQL", ...DASH_SQL },
+  // SQL family ('' escapes a quote, not backslash)
+  sql: { name: "SQL", ...DASH_SQL, strings: [SQ_RAW] },
 
   // Misc
   lua: { name: "Lua", line: ["--"], block: [["--[[", "]]"]] },
-  hs: { name: "Haskell", line: ["--"], block: [["{-", "-}"]] },
-  clj: { name: "Clojure", line: [";"], block: [] },
-  cljs: { name: "Clojure", line: [";"], block: [] },
-  lisp: { name: "Lisp", line: [";"], block: [] },
-  el: { name: "Emacs Lisp", line: [";"], block: [] },
-  vim: { name: "Vim Script", line: ['"'], block: [] },
+  hs: { name: "Haskell", line: ["--"], block: [["{-", "-}"]], strings: STR_DQ_ONLY }, // ' in identifiers
+  clj: { name: "Clojure", line: [";"], block: [], strings: STR_DQ_ONLY }, // ' is quote
+  cljs: { name: "Clojure", line: [";"], block: [], strings: STR_DQ_ONLY },
+  lisp: { name: "Lisp", line: [";"], block: [], strings: STR_DQ_ONLY },
+  el: { name: "Emacs Lisp", line: [";"], block: [], strings: STR_DQ_ONLY },
+  vim: { name: "Vim Script", line: ['"'], block: [], strings: [] }, // " is the comment char
 
   // Stylesheets
   css: { name: "CSS", line: [], block: [["/*", "*/"]] },
@@ -101,10 +118,10 @@ const BY_EXT: Record<string, Lang> = {
   xml: { name: "XML", line: [], block: [["<!--", "-->"]] },
   vue: { name: "Vue", line: ["//"], block: [["/*", "*/"], ["<!--", "-->"]] },
   svelte: { name: "Svelte", line: ["//"], block: [["/*", "*/"], ["<!--", "-->"]] },
-  md: { name: "Markdown", line: [], block: [["<!--", "-->"]] },
-  markdown: { name: "Markdown", line: [], block: [["<!--", "-->"]] },
-  rst: { name: "reStructuredText", line: [], block: [] },
-  adoc: { name: "AsciiDoc", line: ["//"], block: [] },
+  md: { name: "Markdown", line: [], block: [["<!--", "-->"]], strings: [] },
+  markdown: { name: "Markdown", line: [], block: [["<!--", "-->"]], strings: [] },
+  rst: { name: "reStructuredText", line: [], block: [], strings: [] },
+  adoc: { name: "AsciiDoc", line: ["//"], block: [], strings: [] },
 };
 
 // Special filenames (no useful extension).
@@ -119,7 +136,9 @@ const BY_NAME: Record<string, Lang> = {
 };
 
 function toSyntax(lang: Lang): Syntax {
-  return { name: lang.name, line: lang.line, block: lang.block };
+  // Longest `open` first so e.g. triple-quotes match before single quotes.
+  const strings = [...(lang.strings ?? STR_DEFAULT)].sort((a, b) => b.open.length - a.open.length);
+  return { name: lang.name, line: lang.line, block: lang.block, strings };
 }
 
 /** Detect a file's language/comment-syntax from its path, or null if unknown. */
