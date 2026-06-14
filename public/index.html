@@ -51,7 +51,16 @@
               <option value="countedCode">Total (counted)</option>
             </select>
           </label>
+          <label class="check" title="Stacked area (composition) vs overlaid lines (growth rates)">
+            <input id="stacked" type="checkbox" checked /> Stacked
+          </label>
+          <span class="spacer"></span>
+          <div class="exports">
+            <button id="dl-csv" class="ghost" type="button" title="Download the current table as CSV">CSV</button>
+            <button id="dl-json" class="ghost" type="button" title="Download the full report as JSON">JSON</button>
+          </div>
         </div>
+        <p class="hint muted">Tip: click a legend entry to isolate it; click it again to restore all.</p>
 
         <div class="chart-wrap">
           <canvas id="chart"></canvas>

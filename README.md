@@ -92,6 +92,12 @@ is cloned and sampled, then renders:
 - a **stacked-area chart** of LOC by role over time, and
 - a **per-interval table** (plus a **per-package table** when enabled).
 
+UI niceties: switch **By role / By package** (pick a metric), toggle **Stacked**
+(area/composition) vs unstacked **lines** (growth rates), click a legend entry to
+**isolate** a series, **export** the table as CSV or the full report as JSON, and
+**share the URL** — repo, interval, view, metric and stacked state are encoded in
+the query string and re-run automatically on load.
+
 It's a dependency-light Node HTTP server (`src/server/server.ts`) that reuses the
 same engine as the CLI. Chart.js is self-hosted (no CDN), and the page runs under
 a locked-down `default-src 'self'` CSP. Repo-controlled strings (package names)

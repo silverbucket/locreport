@@ -141,6 +141,33 @@ button:disabled {
   color: var(--muted);
 }
 
+.spacer {
+  flex: 1;
+}
+
+.exports {
+  display: flex;
+  gap: 8px;
+}
+
+.ghost {
+  background: transparent;
+  color: var(--text);
+  border: 1px solid var(--border);
+  padding: 7px 14px;
+  font-weight: 500;
+}
+
+.ghost:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.hint {
+  margin: 8px 2px 0;
+  font-size: 13px;
+}
+
 .chart-wrap {
   background: var(--panel);
   border: 1px solid var(--border);

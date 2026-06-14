@@ -18,12 +18,23 @@ const METRIC_LABEL = {
   comments: "Comments",
   countedCode: "Total (counted)",
 };
+const TABLE_COLS = [
+  ["app", "App"],
+  ["test", "Tests"],
+  ["config", "Config"],
+  ["docs", "Docs"],
+  ["data", "Data"],
+  ["comments", "Comments"],
+  ["countedCode", "Total"],
+  ["excluded", "Excl."],
+];
 const MAX_PKG_SERIES = 14; // group the long tail into "Other" beyond this
 
 let chart = null;
 let report = null;
 let view = "role"; // "role" | "pkg"
 let metric = "app";
+let stacked = true;
 
 /** Reduce a role->bucket map to headline numbers (mirrors src/report.ts). */
 function summarize(byRole) {
@@ -64,17 +75,7 @@ function esc(s) {
 // ---------------------------------------------------------------------------
 
 function table(rows, firstHeader, firstKey) {
-  const cols = [
-    [firstKey, firstHeader],
-    ["app", "App"],
-    ["test", "Tests"],
-    ["config", "Config"],
-    ["docs", "Docs"],
-    ["data", "Data"],
-    ["comments", "Comments"],
-    ["countedCode", "Total"],
-    ["excluded", "Excl.*"],
-  ];
+  const cols = [[firstKey, firstHeader], ...TABLE_COLS];
   const thead = `<thead><tr>${cols.map(([, h]) => `<th>${h}</th>`).join("")}</tr></thead>`;
   const body = rows
     .map((r) => {
@@ -91,19 +92,25 @@ function table(rows, firstHeader, firstKey) {
   return `<table>${thead}<tbody>${body}</tbody></table>`;
 }
 
-function renderTables() {
-  const rows = report.snapshots.map((s) => ({ date: s.date, ...summarize(s.byRole) }));
-  $("table").innerHTML = table(rows, "Date", "date");
+function intervalRows() {
+  return report.snapshots.map((s) => ({ date: s.date, ...summarize(s.byRole) }));
+}
 
+function packageRows() {
   const last = report.snapshots[report.snapshots.length - 1];
-  const pkgs = (last && last.byPackage) || [];
-  if (pkgs.length) {
-    const pkgRows = pkgs.map((p) => ({ pkg: p.name || "(root)", ...summarize(p.byRole) }));
+  return ((last && last.byPackage) || []).map((p) => ({ pkg: p.name || "(root)", ...summarize(p.byRole) }));
+}
+
+function renderTables() {
+  $("table").innerHTML = table(intervalRows(), "Date", "date");
+  const pkgRows = packageRows();
+  if (pkgRows.length) {
+    const last = report.snapshots[report.snapshots.length - 1];
     $("pkg-table").innerHTML = table(pkgRows, "Package", "pkg");
     $("pkg-date").textContent = `(latest snapshot: ${last.date})`;
   }
   $("role-tables").hidden = view !== "role";
-  $("packages").hidden = view !== "pkg" || !pkgs.length;
+  $("packages").hidden = view !== "pkg" || !pkgRows.length;
 }
 
 // ---------------------------------------------------------------------------
@@ -111,7 +118,6 @@ function renderTables() {
 // ---------------------------------------------------------------------------
 
 function packageSeries(metricKey) {
-  // Latest name per id (names can in principle change over time).
   const nameById = new Map();
   for (const s of report.snapshots) for (const p of s.byPackage || []) nameById.set(p.id, p.name || "(root)");
 
@@ -131,7 +137,6 @@ function packageSeries(metricKey) {
 
   let series = ids.map((id) => ({ label: nameById.get(id), values: valueById.get(id) }));
 
-  // Group the long tail into a single "Other" band for readability.
   if (series.length > MAX_PKG_SERIES) {
     const head = series.slice(0, MAX_PKG_SERIES - 1);
     const tail = series.slice(MAX_PKG_SERIES - 1);
@@ -152,6 +157,15 @@ function pkgColor(i, total, isOther) {
   return { border: `hsl(${hue} 62% 55%)`, fill: `hsl(${hue} 62% 55% / 0.8)` };
 }
 
+/** Legend click isolates one series; clicking the isolated one restores all. */
+function legendIsolate(_e, item, legend) {
+  const ci = legend.chart;
+  const idx = item.datasetIndex;
+  const onlyThis = ci.data.datasets.every((_, i) => ci.isDatasetVisible(i) === (i === idx));
+  ci.data.datasets.forEach((_, i) => ci.setDatasetVisibility(i, onlyThis ? true : i === idx));
+  ci.update();
+}
+
 function drawChart(labels, datasets, yTitle) {
   const cfg = {
     type: "line",
@@ -161,16 +175,16 @@ function drawChart(labels, datasets, yTitle) {
       maintainAspectRatio: false,
       interaction: { mode: "index", intersect: false },
       scales: {
-        x: { stacked: true, grid: { color: "#262b36" }, ticks: { color: "#98a2b3" } },
+        x: { stacked, grid: { color: "#262b36" }, ticks: { color: "#98a2b3" } },
         y: {
-          stacked: true,
+          stacked,
           grid: { color: "#262b36" },
           ticks: { color: "#98a2b3", callback: (v) => n(v) },
           title: { display: true, text: yTitle, color: "#98a2b3" },
         },
       },
       plugins: {
-        legend: { labels: { color: "#e6e9ef", boxWidth: 12 } },
+        legend: { labels: { color: "#e6e9ef", boxWidth: 12 }, onClick: legendIsolate },
         tooltip: { callbacks: { label: (c) => `${c.dataset.label}: ${n(c.parsed.y)}` } },
       },
     },
@@ -189,8 +203,8 @@ function renderChart() {
       data: summaries.map((s) => s[key]),
       backgroundColor: color + "cc",
       borderColor: color,
-      borderWidth: 1,
-      fill: true,
+      borderWidth: stacked ? 1 : 2,
+      fill: stacked,
       pointRadius: 0,
       tension: 0.2,
     }));
@@ -206,8 +220,8 @@ function renderChart() {
       data: s.values,
       backgroundColor: color.fill,
       borderColor: color.border,
-      borderWidth: 1,
-      fill: true,
+      borderWidth: stacked ? 1 : 2,
+      fill: stacked,
       pointRadius: 0,
       tension: 0.2,
     };
@@ -215,18 +229,83 @@ function renderChart() {
   drawChart(labels, datasets, `${METRIC_LABEL[metric]} — lines of code`);
 }
 
+function render() {
+  renderChart();
+  renderTables();
+}
+
 // ---------------------------------------------------------------------------
-// View wiring
+// Exports
 // ---------------------------------------------------------------------------
+
+function repoSlug() {
+  try {
+    return new URL(report.repoUrl).pathname.replace(/^\/+/, "").replace(/\//g, "-") || "report";
+  } catch {
+    return "report";
+  }
+}
+
+function download(name, text, type) {
+  const blob = new Blob([text], { type });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = name;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+}
+
+function csvCell(v) {
+  const s = String(v);
+  return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+}
+
+function toCsv(rows, firstHeader, firstKey) {
+  const cols = [[firstKey, firstHeader], ...TABLE_COLS];
+  const lines = [cols.map(([, h]) => csvCell(h)).join(",")];
+  for (const r of rows) lines.push(cols.map(([k]) => csvCell(r[k])).join(","));
+  return lines.join("\n");
+}
+
+function exportCsv() {
+  if (!report) return;
+  if (view === "pkg") {
+    download(`locreport-${repoSlug()}-packages.csv`, toCsv(packageRows(), "Package", "pkg"), "text/csv");
+  } else {
+    download(`locreport-${repoSlug()}.csv`, toCsv(intervalRows(), "Date", "date"), "text/csv");
+  }
+}
+
+function exportJson() {
+  if (!report) return;
+  download(`locreport-${repoSlug()}.json`, JSON.stringify(report, null, 2), "application/json");
+}
+
+// ---------------------------------------------------------------------------
+// View wiring + shareable URL
+// ---------------------------------------------------------------------------
+
+function syncUrl(extra) {
+  const params = new URLSearchParams({
+    repo: $("repo").value.trim(),
+    interval: $("interval").value,
+    view,
+    metric,
+    stacked: stacked ? "1" : "0",
+    ...extra,
+  });
+  history.replaceState(null, "", `?${params}`);
+}
 
 function setView(next) {
   view = next;
   $("view-role").classList.toggle("active", view === "role");
   $("view-pkg").classList.toggle("active", view === "pkg");
   $("metric-wrap").hidden = view !== "pkg";
-  if (!report) return;
-  renderChart();
-  renderTables();
+  if (report) render();
+  syncUrl();
 }
 
 $("view-role").addEventListener("click", () => setView("role"));
@@ -234,7 +313,15 @@ $("view-pkg").addEventListener("click", () => setView("pkg"));
 $("metric").addEventListener("change", (e) => {
   metric = e.target.value;
   if (report && view === "pkg") renderChart();
+  syncUrl();
 });
+$("stacked").addEventListener("change", (e) => {
+  stacked = e.target.checked;
+  if (report) renderChart();
+  syncUrl();
+});
+$("dl-csv").addEventListener("click", exportCsv);
+$("dl-json").addEventListener("click", exportJson);
 
 function setStatus(msg, isError) {
   const el = $("status");
@@ -243,12 +330,12 @@ function setStatus(msg, isError) {
   el.classList.toggle("error", !!isError);
 }
 
-$("form").addEventListener("submit", (ev) => {
-  ev.preventDefault();
-  const repo = $("repo").value.trim();
-  if (!repo) return;
+function runAnalysis() {
+  const repoInput = $("repo").value.trim();
+  if (!repoInput) return;
 
-  const params = new URLSearchParams({ repo, interval: $("interval").value });
+  syncUrl();
+  const params = new URLSearchParams({ repo: repoInput, interval: $("interval").value });
 
   $("go").disabled = true;
   $("results").hidden = true;
@@ -259,9 +346,11 @@ $("form").addEventListener("submit", (ev) => {
   es.addEventListener("progress", (e) => {
     const p = JSON.parse(e.data);
     if (p.type === "cloning") setStatus(`Cloning ${p.repo}…`);
+    else if (p.type === "updating") setStatus(`Updating cached clone of ${p.repo}…`);
     else if (p.type === "resolved")
-      setStatus(`Branch ${p.branch} · counter "${p.counter}" · ${p.snapshots} snapshots…`);
-    else if (p.type === "snapshot") setStatus(`Analyzing ${p.index}/${p.total} — ${p.date}…`);
+      setStatus(`Branch ${p.branch} · counter "${p.counter}" · ${p.snapshots} snapshots${p.cached ? ` (${p.cached} cached)` : ""}…`);
+    else if (p.type === "snapshot")
+      setStatus(`Analyzing ${p.index}/${p.total} — ${p.date}${p.cached ? " (cached)" : ""}…`);
   });
 
   es.addEventListener("done", (e) => {
@@ -269,8 +358,7 @@ $("form").addEventListener("submit", (ev) => {
     es.close();
     $("go").disabled = false;
     setStatus(`Done — ${report.snapshots.length} snapshots of ${report.repoUrl}`);
-    renderChart();
-    renderTables();
+    render();
     $("results").hidden = false;
   });
 
@@ -286,4 +374,27 @@ $("form").addEventListener("submit", (ev) => {
       setStatus("Connection closed before completion.", true);
     }
   };
+}
+
+$("form").addEventListener("submit", (ev) => {
+  ev.preventDefault();
+  runAnalysis();
 });
+
+// Restore state from a shared URL and auto-run.
+(function initFromUrl() {
+  const q = new URLSearchParams(location.search);
+  const repo = q.get("repo");
+  if (repo) $("repo").value = repo;
+  if (q.get("interval")) $("interval").value = q.get("interval");
+  if (q.get("metric") && METRIC_LABEL[q.get("metric")]) {
+    metric = q.get("metric");
+    $("metric").value = metric;
+  }
+  if (q.get("stacked") === "0") {
+    stacked = false;
+    $("stacked").checked = false;
+  }
+  if (q.get("view") === "pkg") setView("pkg");
+  if (repo) runAnalysis();
+})();
