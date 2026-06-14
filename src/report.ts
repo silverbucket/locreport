@@ -1,8 +1,6 @@
-import { EXCLUDED_ROLES, type Report, type Snapshot } from "./types.js";
+import { EXCLUDED_ROLES, type Bucket, type Report, type Role, type Snapshot } from "./types.js";
 
-export interface SnapshotSummary {
-  date: string;
-  sha: string;
+export interface RoleSummary {
   app: number;
   test: number;
   config: number;
@@ -16,11 +14,17 @@ export interface SnapshotSummary {
   excluded: number;
 }
 
-export function summarizeSnapshot(s: Snapshot): SnapshotSummary {
+export interface SnapshotSummary extends RoleSummary {
+  date: string;
+  sha: string;
+}
+
+/** Summarize a role->bucket map into the report's headline numbers. */
+export function summarizeRoles(byRole: Record<Role, Bucket>): RoleSummary {
   let comments = 0;
   let countedCode = 0;
   let excluded = 0;
-  for (const [role, b] of Object.entries(s.byRole)) {
+  for (const [role, b] of Object.entries(byRole)) {
     if (EXCLUDED_ROLES.has(role as never)) {
       excluded += b.code;
     } else {
@@ -29,17 +33,19 @@ export function summarizeSnapshot(s: Snapshot): SnapshotSummary {
     }
   }
   return {
-    date: s.date,
-    sha: s.sha.slice(0, 8),
-    app: s.byRole.app.code,
-    test: s.byRole.test.code,
-    config: s.byRole.config.code,
-    docs: s.byRole.docs.code,
-    data: s.byRole.data.code,
+    app: byRole.app.code,
+    test: byRole.test.code,
+    config: byRole.config.code,
+    docs: byRole.docs.code,
+    data: byRole.data.code,
     comments,
     countedCode,
     excluded,
   };
+}
+
+export function summarizeSnapshot(s: Snapshot): SnapshotSummary {
+  return { date: s.date, sha: s.sha.slice(0, 8), ...summarizeRoles(s.byRole) };
 }
 
 function pad(value: string, width: number, left = true): string {
@@ -85,4 +91,39 @@ export function formatReport(report: Report): string {
     "* Excl. = build + vendored/generated code (excluded from Total).",
     "  Counts are lines of CODE; Comments is comment lines across counted roles.",
   ].join("\n");
+}
+
+/**
+ * Render the per-package breakdown for the latest snapshot as a table. Returns
+ * an empty string if the report has no package data. (Per-snapshot package
+ * history is available in the JSON output for charting.)
+ */
+export function formatPackages(report: Report): string {
+  const last = report.snapshots[report.snapshots.length - 1];
+  if (!last?.byPackage || last.byPackage.length === 0) return "";
+
+  const rows = last.byPackage.map((p) => ({ pkg: p.name || "(root)", ...summarizeRoles(p.byRole) }));
+
+  const cols: Array<{ key: keyof (typeof rows)[number]; header: string; left?: boolean }> = [
+    { key: "pkg", header: "Package", left: true },
+    { key: "app", header: "App" },
+    { key: "test", header: "Tests" },
+    { key: "config", header: "Config" },
+    { key: "docs", header: "Docs" },
+    { key: "data", header: "Data" },
+    { key: "comments", header: "Comments" },
+    { key: "countedCode", header: "Total" },
+    { key: "excluded", header: "Excl.*" },
+  ];
+
+  const fmt = (key: string, v: string | number) => (key === "pkg" ? String(v) : Number(v).toLocaleString("en-US"));
+  const widths = cols.map((c) => Math.max(c.header.length, ...rows.map((r) => fmt(c.key, r[c.key]).length)));
+  const line = (vals: Array<string | number>) =>
+    cols.map((c, i) => pad(fmt(c.key, vals[i]!), widths[i]!, !c.left)).join("  ");
+
+  const header = cols.map((c, i) => pad(c.header, widths[i]!, !c.left)).join("  ");
+  const sep = widths.map((w) => "-".repeat(w)).join("  ");
+  const body = rows.map((r) => line(cols.map((c) => r[c.key]))).join("\n");
+
+  return [`Per-package breakdown (latest snapshot: ${last.date}):`, "", header, sep, body].join("\n");
 }

@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import { analyzeRepo } from "./analyze.js";
 import { isInterval, INTERVALS } from "./intervals.js";
-import { formatReport } from "./report.js";
+import { formatPackages, formatReport } from "./report.js";
 import type { Interval } from "./types.js";
 
 interface Args {
@@ -9,10 +9,11 @@ interface Args {
   interval: Interval;
   branch?: string;
   json: boolean;
+  byPackage: boolean;
 }
 
 function parseArgs(argv: string[]): Args {
-  const args: Args = { interval: "1y", json: false };
+  const args: Args = { interval: "1y", json: false, byPackage: false };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i]!;
     if (a === "--interval" || a === "-i") {
@@ -23,6 +24,8 @@ function parseArgs(argv: string[]): Args {
       args.branch = argv[++i];
     } else if (a === "--json") {
       args.json = true;
+    } else if (a === "--by-package" || a === "-p") {
+      args.byPackage = true;
     } else if (a === "--help" || a === "-h") {
       args.url = undefined;
       return args;
@@ -38,12 +41,19 @@ function parseArgs(argv: string[]): Args {
 const HELP = `locreport — LOC over time for a GitHub repo, split by role.
 
 Usage:
-  locreport <github-repo> [--interval 1m|3m|6m|1y] [--branch <name>] [--json]
+  locreport <github-repo> [--interval 1m|3m|6m|1y] [--branch <name>] [--by-package] [--json]
 
 Examples:
   locreport erikbern/git-of-theseus
   locreport https://github.com/XAMPPRocky/tokei --interval 6m
+  locreport some/monorepo --by-package
   locreport owner/repo --json > report.json
+
+Options:
+  -i, --interval    sampling interval (default 1y)
+  -b, --branch      branch to analyze (default: repo default)
+  -p, --by-package  also break down per package (monorepo workspaces)
+      --json        emit full JSON (includes per-snapshot package history)
 
 Roles: app, test, config, docs, data (counted) and build, vendored (excluded).
 `;
@@ -66,6 +76,7 @@ async function main(): Promise<void> {
   const report = await analyzeRepo(args.url, {
     interval: args.interval,
     branch: args.branch,
+    byPackage: args.byPackage,
     onProgress: (e) => {
       if (args.json) return; // keep stdout clean for JSON
       if (e.type === "cloning") process.stderr.write(`Cloning ${e.repo}...\n`);
@@ -76,8 +87,16 @@ async function main(): Promise<void> {
     },
   });
 
-  if (args.json) process.stdout.write(JSON.stringify(report, null, 2) + "\n");
-  else process.stdout.write("\n" + formatReport(report) + "\n");
+  if (args.json) {
+    process.stdout.write(JSON.stringify(report, null, 2) + "\n");
+    return;
+  }
+
+  process.stdout.write("\n" + formatReport(report) + "\n");
+  if (args.byPackage) {
+    const pkgs = formatPackages(report);
+    process.stdout.write(pkgs ? "\n" + pkgs + "\n" : "\n(No packages detected — single-package repo.)\n");
+  }
 }
 
 main().catch((err) => {

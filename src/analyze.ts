@@ -1,7 +1,9 @@
+import { readFileSync } from "node:fs";
 import { mkdir, mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { aggregateByRole, classifyFiles } from "./aggregate.js";
+import { aggregateByPackage, aggregateByRole, classifyFiles } from "./aggregate.js";
+import { detectPackages } from "./packages.js";
 import { getCounter, type Counter } from "./counter.js";
 import { parseGitHubRepo } from "./github.js";
 import {
@@ -20,6 +22,8 @@ export interface AnalyzeOptions {
   branch?: string;
   /** Override the counter (mainly for tests); defaults to cloc-or-builtin. */
   counter?: Counter;
+  /** Also compute a per-package breakdown (monorepo support). */
+  byPackage?: boolean;
   /** Progress callback for UIs/CLIs. */
   onProgress?: (event: ProgressEvent) => void;
 }
@@ -89,19 +93,19 @@ export async function analyzeBareRepo(
   options.onProgress?.({ type: "resolved", branch, counter: counter.name, snapshots: points.length });
 
   // Count each unique sha once; reuse for any later boundary on the same sha.
-  const cache = new Map<string, Snapshot["byRole"]>();
+  const cache = new Map<string, CommitCounts>();
   const snapshots: Snapshot[] = [];
 
   for (let i = 0; i < points.length; i++) {
     const { date, sha } = points[i]!;
     options.onProgress?.({ type: "snapshot", index: i + 1, total: points.length, date, sha });
 
-    let byRole = cache.get(sha);
-    if (!byRole) {
-      byRole = await countCommit(gitDir, sha, workRoot, counter);
-      cache.set(sha, byRole);
+    let counts = cache.get(sha);
+    if (!counts) {
+      counts = await countCommit(gitDir, sha, workRoot, counter, options.byPackage ?? false);
+      cache.set(sha, counts);
     }
-    snapshots.push({ date, sha, byRole });
+    snapshots.push({ date, sha, byRole: counts.byRole, byPackage: counts.byPackage });
   }
 
   return {
@@ -114,19 +118,40 @@ export async function analyzeBareRepo(
   };
 }
 
+interface CommitCounts {
+  byRole: Snapshot["byRole"];
+  byPackage?: Snapshot["byPackage"];
+}
+
 async function countCommit(
   gitDir: string,
   sha: string,
   workRoot: string,
   counter: Counter,
-): Promise<Snapshot["byRole"]> {
+  byPackage: boolean,
+): Promise<CommitCounts> {
   const dest = path.join(workRoot, `tree-${sha}`);
   const tar = path.join(workRoot, `tree-${sha}.tar`);
   await mkdir(dest, { recursive: true });
   try {
     await extractCommit(gitDir, sha, tar, dest);
     const files = await counter.count(dest);
-    return aggregateByRole(classifyFiles(files));
+    const classified = classifyFiles(files);
+    const result: CommitCounts = { byRole: aggregateByRole(classified) };
+    if (byPackage) {
+      const detection = detectPackages(
+        files.map((f) => f.path),
+        (rel) => {
+          try {
+            return readFileSync(path.join(dest, rel), "utf8");
+          } catch {
+            return null;
+          }
+        },
+      );
+      result.byPackage = aggregateByPackage(classified, detection);
+    }
+    return result;
   } finally {
     await rm(dest, { recursive: true, force: true });
     await rm(tar, { force: true });

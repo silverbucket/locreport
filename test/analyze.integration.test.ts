@@ -67,6 +67,66 @@ afterAll(async () => {
   await rm(workRoot, { recursive: true, force: true });
 });
 
+describe("analyzeBareRepo — monorepo per-package (end-to-end)", () => {
+  let mono: string;
+  let monoGitDir: string;
+
+  beforeAll(async () => {
+    mono = await mkdtemp(path.join(tmpdir(), "locreport-mono-"));
+    const src = path.join(mono, "src-repo");
+    await mkdir(src, { recursive: true });
+    git(["init", "-b", "main"], src);
+
+    await write(src, "pnpm-workspace.yaml", "packages:\n  - 'packages/*'\n  - 'apps/*'\n");
+    await write(src, "package.json", '{"name":"root","private":true}\n');
+    await write(src, "README.md", "# Monorepo\n\nDocs at root.\n");
+
+    await write(src, "packages/api/package.json", '{"name":"@acme/api"}\n');
+    await write(src, "packages/api/src/server.ts", "export const port = 3000;\nexport function serve() {\n  return port;\n}\n");
+    await write(src, "packages/api/test/server.test.ts", "// api tests\ntest('serve', () => {});\n");
+
+    await write(src, "apps/web/package.json", '{"name":"@acme/web"}\n');
+    await write(src, "apps/web/index.ts", "export const app = 1;\n");
+
+    git(["add", "-A"], src);
+    git(["commit", "-m", "monorepo"], src, "2023-06-01T12:00:00");
+
+    monoGitDir = path.join(mono, "repo.git");
+    git(["clone", "--bare", "--quiet", src, monoGitDir], mono);
+  });
+
+  afterAll(async () => {
+    await rm(mono, { recursive: true, force: true });
+  });
+
+  it("splits roles per workspace package", async () => {
+    const report = await analyzeBareRepo(
+      monoGitDir,
+      mono,
+      { repoUrl: "https://github.com/test/mono", cloneUrl: "https://github.com/test/mono.git" },
+      { interval: "1y", counter: new BuiltinCounter(), byPackage: true },
+    );
+
+    const last = report.snapshots[report.snapshots.length - 1]!;
+    const pkgs = Object.fromEntries((last.byPackage ?? []).map((p) => [p.id, p]));
+
+    expect(pkgs["packages/api"]!.name).toBe("@acme/api");
+    expect(pkgs["packages/api"]!.byRole.app.code).toBeGreaterThan(0);
+    expect(pkgs["packages/api"]!.byRole.test.code).toBeGreaterThan(0);
+
+    expect(pkgs["apps/web"]!.name).toBe("@acme/web");
+    expect(pkgs["apps/web"]!.byRole.app.code).toBeGreaterThan(0);
+    expect(pkgs["apps/web"]!.byRole.test.code).toBe(0);
+
+    // Root README is documentation owned by the root bucket.
+    expect(pkgs[""]!.byRole.docs.code).toBeGreaterThan(0);
+
+    // Repo-wide app code equals the sum of per-package app code.
+    const perPkgApp = (last.byPackage ?? []).reduce((s, p) => s + p.byRole.app.code, 0);
+    expect(perPkgApp).toBe(last.byRole.app.code);
+  });
+});
+
 describe("analyzeBareRepo (end-to-end, builtin counter)", () => {
   it("produces a yearly snapshot per commit with correct role splits", async () => {
     const report = await analyzeBareRepo(
@@ -99,6 +159,18 @@ describe("analyzeBareRepo (end-to-end, builtin counter)", () => {
     // The vendored file must NOT inflate app code.
     const vendored = report.snapshots[2]!.byRole.vendored;
     expect(vendored.files).toBe(1);
+  });
+
+  it("produces a per-package breakdown when byPackage is enabled", async () => {
+    const report = await analyzeBareRepo(
+      gitDir,
+      workRoot,
+      { repoUrl: "https://github.com/test/repo", cloneUrl: "https://github.com/test/repo.git" },
+      { interval: "1y", counter: new BuiltinCounter(), byPackage: true },
+    );
+    const last = report.snapshots[report.snapshots.length - 1]!;
+    expect(last.byPackage).toBeDefined();
+    expect(last.byPackage!.length).toBeGreaterThan(0);
   });
 
   it("samples fewer snapshots at a coarser-than-history interval", async () => {

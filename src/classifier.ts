@@ -142,7 +142,21 @@ export const DEFAULT_RULES: Rule[] = [
     role: "test",
     label: "test / spec directory",
     test: (p) =>
-      hasSegment(p, ["test", "tests", "spec", "specs", "__tests__", "__mocks__", "e2e", "testdata", "fixtures"]),
+      hasSegment(p, [
+        "test",
+        "tests",
+        "spec",
+        "specs",
+        "__tests__",
+        "__mocks__",
+        "e2e",
+        "testdata",
+        "fixtures",
+        "integration",
+        "integration-tests",
+        "stress-test",
+        "stress-tests",
+      ]),
   },
   {
     role: "test",

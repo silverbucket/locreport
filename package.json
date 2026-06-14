@@ -7,20 +7,28 @@
     "locreport": "./dist/cli.js"
   },
   "scripts": {
-    "build": "tsc",
+    "analyze": "tsx src/cli.ts",
     "dev": "tsx src/cli.ts",
+    "build": "tsc",
+    "start": "node dist/cli.js",
     "test": "vitest run",
     "test:watch": "vitest",
-    "typecheck": "tsc --noEmit"
+    "test:unit": "vitest run --exclude '**/*.integration.test.ts'",
+    "test:integration": "vitest run test/analyze.integration.test.ts",
+    "typecheck": "tsc --noEmit",
+    "clean": "rm -rf dist",
+    "check": "pnpm run typecheck && pnpm run test"
   },
+  "packageManager": "pnpm@11.0.8",
   "engines": {
-    "node": ">=20"
+    "node": ">=20",
+    "pnpm": ">=10"
   },
   "license": "MIT",
   "devDependencies": {
-    "@types/node": "^22.10.0",
-    "tsx": "^4.19.0",
-    "typescript": "^5.7.0",
-    "vitest": "^2.1.0"
+    "@types/node": "^22.19.21",
+    "tsx": "^4.22.4",
+    "typescript": "^5.9.3",
+    "vitest": "^2.1.9"
   }
 }

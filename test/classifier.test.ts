@@ -17,6 +17,9 @@ describe("classify", () => {
     ["spec/models/user_spec.rb", "test"],
     ["tests/conftest.py", "test"],
     ["e2e/login.spec.ts", "test"],
+    ["integration/api.ts", "test"],
+    ["stress-tests/load.js", "test"],
+    ["packages/api/integration/db.ts", "test"],
 
     // build / tooling (excluded)
     ["Dockerfile", "build"],

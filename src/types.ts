@@ -38,6 +38,15 @@ export interface Bucket {
   files: number;
 }
 
+/** Per-package role breakdown within a snapshot (monorepo support). */
+export interface PackageSnapshot {
+  /** Package root dir, repo-relative ("" = repo root). */
+  id: string;
+  /** Human-readable name (manifest name, else dir basename). */
+  name: string;
+  byRole: Record<Role, Bucket>;
+}
+
 /** Analysis result for a single point in time. */
 export interface Snapshot {
   /** ISO date (YYYY-MM-DD) of the interval boundary. */
@@ -46,6 +55,8 @@ export interface Snapshot {
   sha: string;
   /** Counts grouped by role. */
   byRole: Record<Role, Bucket>;
+  /** Per-package breakdown (present only when package analysis is enabled). */
+  byPackage?: PackageSnapshot[];
 }
 
 /** Full report across all sampled snapshots. */
