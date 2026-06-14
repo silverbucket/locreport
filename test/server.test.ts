@@ -56,3 +56,30 @@ describe("/api/analyze SSE", () => {
     expect(body).toContain("Missing");
   });
 });
+
+describe("rate limiting", () => {
+  let rlServer: Server;
+  let rlBase: string;
+
+  beforeAll(async () => {
+    process.env.LOCREPORT_RATE_MAX = "1";
+    rlServer = createServer();
+    await new Promise<void>((resolve) => rlServer.listen(0, "127.0.0.1", resolve));
+    rlBase = `http://127.0.0.1:${(rlServer.address() as AddressInfo).port}`;
+  });
+
+  afterAll(async () => {
+    delete process.env.LOCREPORT_RATE_MAX;
+    await new Promise<void>((resolve) => rlServer.close(() => resolve()));
+  });
+
+  it("blocks a second request from the same client within the window", async () => {
+    // Both use a rejected-but-well-formed repo so they fail fast without cloning.
+    const q = `repo=${encodeURIComponent("https://gitlab.com/a/b")}`;
+    const first = await (await fetch(`${rlBase}/api/analyze?${q}`)).text();
+    const second = await (await fetch(`${rlBase}/api/analyze?${q}`)).text();
+    expect(first).not.toContain("Rate limit");
+    expect(first).toContain("valid GitHub repository");
+    expect(second).toContain("Rate limit");
+  });
+});

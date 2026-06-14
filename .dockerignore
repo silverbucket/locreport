@@ -1,0 +1,10 @@
+.git
+node_modules
+dist
+test
+tmp
+*.log
+.DS_Store
+.locreport-cache
+.github
+README.md

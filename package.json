@@ -18,7 +18,10 @@
     "test:integration": "vitest run test/analyze.integration.test.ts",
     "typecheck": "tsc --noEmit",
     "clean": "rm -rf dist",
-    "check": "pnpm run typecheck && pnpm run test"
+    "check": "pnpm run typecheck && pnpm run test",
+    "docker:build": "docker build -t locreport .",
+    "docker:up": "docker compose up -d --build",
+    "docker:down": "docker compose down"
   },
   "packageManager": "pnpm@11.0.8",
   "engines": {

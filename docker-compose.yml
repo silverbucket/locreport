@@ -1,0 +1,25 @@
+services:
+  locreport:
+    build: .
+    image: locreport
+    container_name: locreport
+    ports:
+      - "4317:4317"
+    volumes:
+      # Persist the bare-clone + per-commit cache across restarts.
+      - locreport-cache:/cache
+    environment:
+      PORT: "4317"
+      LOCREPORT_CACHE_DIR: /cache
+      # --- safety limits (defaults shown; uncomment to tune) ---
+      # LOCREPORT_MAX_CONCURRENT: "2"    # simultaneous analyses
+      # LOCREPORT_MAX_QUEUE: "10"        # waiters before "server busy"
+      # LOCREPORT_RATE_MAX: "30"         # requests per IP per window
+      # LOCREPORT_RATE_WINDOW_MS: "60000"
+      # LOCREPORT_MAX_REPO_MB: "2048"    # reject bare repos larger than this
+      # LOCREPORT_GIT_TIMEOUT_MS: "300000"
+      # LOCREPORT_ANALYSIS_TIMEOUT_MS: "600000"
+    restart: unless-stopped
+
+volumes:
+  locreport-cache:

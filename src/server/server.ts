@@ -5,6 +5,7 @@ import { fileURLToPath } from "node:url";
 import { analyzeRepo } from "../analyze.js";
 import { isInterval } from "../intervals.js";
 import type { Interval } from "../types.js";
+import { BusyError, clientIp, loadLimits, RateLimiter, Semaphore } from "./limits.js";
 
 const ROOT = path.resolve(fileURLToPath(new URL("../..", import.meta.url)));
 const PUBLIC_DIR = path.join(ROOT, "public");
@@ -39,7 +40,21 @@ async function serveStatic(res: ServerResponse, entry: { file: string; type: str
   }
 }
 
-async function handleAnalyze(req: IncomingMessage, res: ServerResponse, url: URL): Promise<void> {
+interface Gate {
+  limits: ReturnType<typeof loadLimits>;
+  semaphore: Semaphore;
+  rateLimiter: RateLimiter;
+}
+
+function withTimeout<T>(promise: Promise<T>, ms: number, message: string): Promise<T> {
+  let timer: NodeJS.Timeout;
+  const timeout = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => reject(new Error(message)), ms);
+  });
+  return Promise.race([promise, timeout]).finally(() => clearTimeout(timer)) as Promise<T>;
+}
+
+async function handleAnalyze(req: IncomingMessage, res: ServerResponse, url: URL, gate: Gate): Promise<void> {
   const repo = url.searchParams.get("repo")?.trim() ?? "";
   const intervalRaw = url.searchParams.get("interval") ?? "1y";
   const interval: Interval = isInterval(intervalRaw) ? intervalRaw : "1y";
@@ -52,7 +67,7 @@ async function handleAnalyze(req: IncomingMessage, res: ServerResponse, url: URL
     "content-type": "text/event-stream",
     "cache-control": "no-cache, no-transform",
     connection: "keep-alive",
-    "x-accent-buffering": "no",
+    "x-accel-buffering": "no",
   });
 
   let closed = false;
@@ -66,15 +81,40 @@ async function handleAnalyze(req: IncomingMessage, res: ServerResponse, url: URL
     return;
   }
 
+  // Per-IP rate limit.
+  if (!gate.rateLimiter.allow(clientIp(req), Date.now())) {
+    sse(res, "fail", { message: "Rate limit exceeded. Please slow down and try again shortly." });
+    res.end();
+    return;
+  }
+
+  // Bounded concurrency (with a small queue).
+  let release: (() => void) | null = null;
   try {
-    const report = await analyzeRepo(repo, {
-      interval,
-      branch,
-      byPackage,
-      onProgress: (e) => {
-        if (!closed) sse(res, "progress", e);
-      },
-    });
+    release = await gate.semaphore.acquire();
+  } catch (err) {
+    if (err instanceof BusyError) {
+      sse(res, "fail", { message: err.message });
+      res.end();
+      return;
+    }
+    throw err;
+  }
+
+  try {
+    const report = await withTimeout(
+      analyzeRepo(repo, {
+        interval,
+        branch,
+        byPackage,
+        maxRepoMb: gate.limits.maxRepoMb,
+        onProgress: (e) => {
+          if (!closed) sse(res, "progress", e);
+        },
+      }),
+      gate.limits.analysisTimeoutMs,
+      "Analysis timed out.",
+    );
     if (!closed) {
       sse(res, "done", report);
       res.end();
@@ -84,15 +124,26 @@ async function handleAnalyze(req: IncomingMessage, res: ServerResponse, url: URL
       sse(res, "fail", { message: (err as Error).message });
       res.end();
     }
+  } finally {
+    release();
   }
 }
 
 export function createServer(): Server {
+  const limits = loadLimits();
+  // Let the engine's git ops honor the configured timeout.
+  if (!process.env.LOCREPORT_GIT_TIMEOUT_MS) process.env.LOCREPORT_GIT_TIMEOUT_MS = String(limits.gitTimeoutMs);
+  const gate: Gate = {
+    limits,
+    semaphore: new Semaphore(limits.maxConcurrent, limits.maxQueue),
+    rateLimiter: new RateLimiter(limits.rateMax, limits.rateWindowMs),
+  };
+
   return createHttpServer((req, res) => {
     const url = new URL(req.url ?? "/", `http://${req.headers.host ?? "localhost"}`);
 
     if (req.method === "GET" && url.pathname === "/api/analyze") {
-      void handleAnalyze(req, res, url);
+      void handleAnalyze(req, res, url, gate);
       return;
     }
 

@@ -19,13 +19,34 @@ const GIT_ENV = {
   GCM_INTERACTIVE: "never",
 };
 
+/** Optional per-process git timeout (ms). Set by the server; unset for the CLI. */
+function gitTimeout(): number | undefined {
+  const v = Number(process.env.LOCREPORT_GIT_TIMEOUT_MS);
+  return Number.isFinite(v) && v > 0 ? v : undefined;
+}
+
 async function git(args: string[], opts: { cwd?: string; maxBuffer?: number } = {}): Promise<string> {
   const { stdout } = await execFileAsync("git", args, {
     env: GIT_ENV,
     cwd: opts.cwd,
     maxBuffer: opts.maxBuffer ?? 16 * 1024 * 1024,
+    timeout: gitTimeout(),
   });
   return stdout;
+}
+
+/**
+ * Approximate on-disk size of a bare repo in KiB (loose objects + packs), via
+ * `git count-objects`. Cheap; used to enforce a size cap before counting.
+ */
+export async function repoSizeKb(gitDir: string): Promise<number> {
+  const out = await git(["--git-dir", gitDir, "count-objects", "-v"]);
+  let kb = 0;
+  for (const line of out.split("\n")) {
+    const m = /^(size|size-pack):\s*(\d+)/.exec(line.trim());
+    if (m) kb += Number(m[2]);
+  }
+  return kb;
 }
 
 /** Bare-clone a repo (full history) into `gitDir`. */
@@ -93,5 +114,5 @@ export async function commitAtOrBefore(gitDir: string, branch: string, isoDate: 
 /** Extract the tree of `sha` into `destDir` (which should already exist). */
 export async function extractCommit(gitDir: string, sha: string, tarPath: string, destDir: string): Promise<void> {
   await git(["--git-dir", gitDir, "archive", "--format=tar", "-o", tarPath, sha]);
-  await execFileAsync("tar", ["-xf", tarPath, "-C", destDir], { maxBuffer: 16 * 1024 * 1024 });
+  await execFileAsync("tar", ["-xf", tarPath, "-C", destDir], { maxBuffer: 16 * 1024 * 1024, timeout: gitTimeout() });
 }

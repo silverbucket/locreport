@@ -7,7 +7,7 @@ import { openCache, type AnalysisCache } from "./cache.js";
 import { detectPackages } from "./packages.js";
 import { getCounter, type Counter } from "./counter.js";
 import { parseGitHubRepo } from "./github.js";
-import { cloneBare, commitAtOrBefore, commitDateRange, defaultBranch, extractCommit } from "./git.js";
+import { cloneBare, commitAtOrBefore, commitDateRange, defaultBranch, extractCommit, repoSizeKb } from "./git.js";
 import { intervalDates } from "./intervals.js";
 import type { CommitCounts, Interval, Report, Snapshot } from "./types.js";
 
@@ -23,6 +23,8 @@ export interface AnalyzeOptions {
   byPackage?: boolean;
   /** Use the on-disk cache (persistent clone + per-commit counts). Default true. */
   cache?: boolean;
+  /** Reject repos whose bare size exceeds this many MB (server-side guard). */
+  maxRepoMb?: number;
   /** Max commits counted concurrently. Defaults to ~CPU count. */
   concurrency?: number;
   /** Progress callback for UIs/CLIs. */
@@ -88,6 +90,13 @@ export async function analyzeBareRepo(
   meta: RepoMeta,
   options: AnalyzeOptions,
 ): Promise<Report> {
+  if (options.maxRepoMb) {
+    const mb = (await repoSizeKb(gitDir)) / 1024;
+    if (mb > options.maxRepoMb) {
+      throw new Error(`Repository too large: ${Math.round(mb)} MB exceeds the ${options.maxRepoMb} MB limit`);
+    }
+  }
+
   const branch = options.branch ?? (await defaultBranch(gitDir));
   const { first, last } = await commitDateRange(gitDir, branch);
   const dates = intervalDates(first, last, options.interval);

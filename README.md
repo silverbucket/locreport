@@ -103,6 +103,37 @@ same engine as the CLI. Chart.js is self-hosted (no CDN), and the page runs unde
 a locked-down `default-src 'self'` CSP. Repo-controlled strings (package names)
 are HTML-escaped before rendering. No persistence yet — each analysis re-clones.
 
+## Deploy (self-host with Docker)
+
+```bash
+pnpm docker:up      # build + run on http://localhost:4317 (docker compose)
+# or:
+docker build -t locreport .
+docker run -p 4317:4317 -v locreport-cache:/cache locreport
+```
+
+The image is a hardened multi-stage build: it runs as a non-root user, bundles
+`git` and `cloc` (so the accurate counter is used automatically), installs only
+production dependencies, persists the cache in a `/cache` volume, and ships a
+healthcheck.
+
+Because the web endpoint clones user-supplied repos, it ships with safety
+limits, all env-overridable (see `docker-compose.yml`):
+
+| Env var | Default | Purpose |
+| --- | --- | --- |
+| `LOCREPORT_MAX_CONCURRENT` | 2 | simultaneous analyses |
+| `LOCREPORT_MAX_QUEUE` | 10 | waiters before "server busy" |
+| `LOCREPORT_RATE_MAX` / `LOCREPORT_RATE_WINDOW_MS` | 30 / 60000 | per-IP rate limit |
+| `LOCREPORT_MAX_REPO_MB` | 2048 | reject bare repos larger than this |
+| `LOCREPORT_GIT_TIMEOUT_MS` | 300000 | per git operation |
+| `LOCREPORT_ANALYSIS_TIMEOUT_MS` | 600000 | per analysis |
+
+These complement the built-in **github.com-only** guard (an SSRF safeguard,
+since the server clones whatever URL it's given). Put a TLS-terminating reverse
+proxy in front for public exposure; `X-Forwarded-For` is honored for rate
+limiting.
+
 ## Caching & performance
 
 By default the engine caches aggressively, so re-runs are near-instant:
