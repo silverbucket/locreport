@@ -1,4 +1,4 @@
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -53,5 +53,25 @@ describe("snapshot cache", () => {
     await cache.setSnapshot("builtin", "abc", counts(1));
     await writeFile(path.join(dir, "snapshots", "builtin", "abc.json"), "{not json");
     expect(await cache.getSnapshot("builtin", "abc")).toBeNull();
+  });
+});
+
+describe("cohort cache", () => {
+  it("round-trips a cohort result", async () => {
+    const cache = openCache(dir);
+    expect(await cache.getCohort("abc")).toBeNull();
+    await cache.setCohort("abc", { total: 30, byYear: { "2021": 10, "2022": 20 } });
+    expect(await cache.getCohort("abc")).toEqual({ total: 30, byYear: { "2021": 10, "2022": 20 } });
+  });
+
+  it("rejects legacy v=2 cohort files (the old all-lines data)", async () => {
+    const cache = openCache(dir);
+    await mkdir(path.join(dir, "cohorts"), { recursive: true });
+    // Old format: cohort files were written with v=2 holding inflated totals.
+    await writeFile(
+      path.join(dir, "cohorts", "abc.json"),
+      JSON.stringify({ v: 2, cohort: { total: 25000, byYear: { "2026": 25000 } } }),
+    );
+    expect(await cache.getCohort("abc")).toBeNull();
   });
 });

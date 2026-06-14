@@ -22,8 +22,10 @@ import type { CommitCounts } from "./types.js";
 // v2: string-literal-aware counting changed code/comment results.
 const CACHE_VERSION = 2;
 // Cohort versioned separately so cohort-only changes don't invalidate counts.
-// v2: cohort counts code lines only (was all physical lines across roles).
-const COHORT_VERSION = 2;
+// NOTE: cohort files were first written with v=2 (they reused CACHE_VERSION),
+// holding the old all-lines data — so this must be > 2 to invalidate them.
+// v3: cohort counts code lines only (was all physical lines across roles).
+const COHORT_VERSION = 3;
 
 function defaultRoot(): string {
   return process.env.LOCREPORT_CACHE_DIR ?? path.join(homedir(), ".cache", "locreport");
