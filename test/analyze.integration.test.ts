@@ -198,23 +198,24 @@ describe("analyzeBareRepo (end-to-end, builtin counter)", () => {
     const last = report.snapshots[report.snapshots.length - 1]!; // 2023 commit
 
     // The first snapshot only contains lines authored in 2021.
-    expect(Object.keys(first.cohortByYear ?? {})).toEqual(["2021"]);
+    expect(Object.keys(first.cohort?.byYear ?? {})).toEqual(["2021"]);
 
     // The latest snapshot has surviving lines from all three commit years.
-    const years = Object.keys(last.cohortByYear ?? {}).sort();
-    expect(years).toEqual(["2021", "2022", "2023"]);
+    expect(Object.keys(last.cohort?.byYear ?? {}).sort()).toEqual(["2021", "2022", "2023"]);
 
-    const totalLast = Object.values(last.cohortByYear!).reduce((a, b) => a + b, 0);
-    const totalFirst = Object.values(first.cohortByYear!).reduce((a, b) => a + b, 0);
-    expect(totalLast).toBeGreaterThan(totalFirst);
+    const sum = (m) => Object.values(m).reduce((a, b) => a + b, 0);
+    expect(sum(last.cohort!.byYear)).toBeGreaterThan(sum(first.cohort!.byYear));
 
-    // The cohort counts code lines only, so its total reconciles with the
-    // snapshot's "Total" counted code (sum of code over non-excluded roles).
+    // Overall cohort reconciles with the snapshot's "Total" counted code...
     const countedCode = (["app", "test", "config", "docs", "data"] as const).reduce(
       (s, r) => s + last.byRole[r].code,
       0,
     );
-    expect(totalLast).toBe(countedCode);
+    expect(sum(last.cohort!.byYear)).toBe(countedCode);
+
+    // ...and the per-role cohort reconciles with that role's code count.
+    expect(sum(last.cohort!.byRoleYear.app ?? {})).toBe(last.byRole.app.code);
+    expect(sum(last.cohort!.byRoleYear.test ?? {})).toBe(last.byRole.test.code);
   });
 
   it("caches per-commit counts so a re-run does no counting", async () => {

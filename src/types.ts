@@ -47,6 +47,14 @@ export interface PackageSnapshot {
   byRole: Record<Role, Bucket>;
 }
 
+/** Code-age cohort: surviving code lines grouped by author-year. */
+export interface Cohort {
+  /** Year -> code lines, across all counted roles (reconciles with "Total"). */
+  byYear: Record<string, number>;
+  /** Per-role year buckets, so the view can scope to app/test/etc. */
+  byRoleYear: Partial<Record<Role, Record<string, number>>>;
+}
+
 /** The counted result for a single commit (cache unit). */
 export interface CommitCounts {
   byRole: Record<Role, Bucket>;
@@ -64,8 +72,8 @@ export interface Snapshot {
   byRole: Record<Role, Bucket>;
   /** Per-package breakdown (present only when package analysis is enabled). */
   byPackage?: PackageSnapshot[];
-  /** Surviving lines grouped by author-year (present only when cohort enabled). */
-  cohortByYear?: Record<string, number>;
+  /** Code-age cohort (present only when cohort analysis is enabled). */
+  cohort?: Cohort;
 }
 
 /** Full report across all sampled snapshots. */

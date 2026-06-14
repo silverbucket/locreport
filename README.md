@@ -61,10 +61,11 @@ npx tsx src/cli.ts sindresorhus/slugify --cohort
 
 Groups each snapshot's surviving **code lines by the year they were authored**
 (theseus-style), via `git blame`. Only code lines are counted (comments/blanks
-excluded) across the counted roles, so the cohort total **reconciles with the
-report's "Total" counted-code** column. The CLI prints the latest snapshot's age
-breakdown; the web UI's **Code age** tab renders it as a stacked area over time
-(total height = codebase size, bands = year-added cohorts). It's the heaviest
+excluded). The cohort is bucketed **per role**, so the web UI's **Code age** tab
+has a role selector (default **App code**, plus Tests/Config/Docs/Data and "All
+counted"); each scope reconciles exactly with the matching role's code count
+(App-scoped cohort == the App column; "All counted" == the Total column). The
+CLI prints the latest snapshot's overall age breakdown. It's the heaviest
 analysis (a blame pass per commit), so it's opt-in and cached per commit.
 
 ### Monorepos (`--by-package`)

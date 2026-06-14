@@ -25,7 +25,8 @@ const CACHE_VERSION = 2;
 // NOTE: cohort files were first written with v=2 (they reused CACHE_VERSION),
 // holding the old all-lines data — so this must be > 2 to invalidate them.
 // v3: cohort counts code lines only (was all physical lines across roles).
-const COHORT_VERSION = 3;
+// v4: cohort shape gained per-role year buckets (byRoleYear).
+const COHORT_VERSION = 4;
 
 function defaultRoot(): string {
   return process.env.LOCREPORT_CACHE_DIR ?? path.join(homedir(), ".cache", "locreport");

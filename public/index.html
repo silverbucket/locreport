@@ -52,6 +52,17 @@
               <option value="countedCode">Total (counted)</option>
             </select>
           </label>
+          <label id="cohort-role-wrap" class="metric" hidden>
+            Role
+            <select id="cohort-role">
+              <option value="app" selected>App code</option>
+              <option value="test">Tests</option>
+              <option value="config">Config</option>
+              <option value="docs">Docs</option>
+              <option value="data">Data</option>
+              <option value="all">All counted</option>
+            </select>
+          </label>
           <label class="check" title="Stacked area (composition) vs overlaid lines (growth rates)">
             <input id="stacked" type="checkbox" checked /> Stacked
           </label>

@@ -134,7 +134,7 @@ export function formatPackages(report: Report): string {
  */
 export function formatCohort(report: Report): string {
   const last = report.snapshots[report.snapshots.length - 1];
-  const byYear = last?.cohortByYear;
+  const byYear = last?.cohort?.byYear;
   if (!byYear || Object.keys(byYear).length === 0) return "";
 
   const years = Object.keys(byYear).sort();

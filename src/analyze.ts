@@ -10,7 +10,7 @@ import { getCounter, type Counter } from "./counter.js";
 import { parseGitHubRepo } from "./github.js";
 import { cloneBare, commitAtOrBefore, commitDateRange, defaultBranch, extractCommit, repoSizeKb } from "./git.js";
 import { intervalDates } from "./intervals.js";
-import type { CommitCounts, Interval, Report, Snapshot } from "./types.js";
+import type { Cohort, CommitCounts, Interval, Report, Snapshot } from "./types.js";
 
 const DEFAULT_CONCURRENCY = Math.max(2, Math.min(8, cpus().length));
 
@@ -152,7 +152,7 @@ export async function analyzeBareRepo(
 
   // Optional code-age cohort: blame each unique commit (cached per sha). This is
   // the heavy phase, so it runs only on request and reuses the disk cache.
-  const cohortBySha = new Map<string, Record<string, number>>();
+  const cohortBySha = new Map<string, Cohort>();
   if (options.cohort) {
     let ci = 0;
     for (const sha of uniqueShas) {
@@ -162,7 +162,7 @@ export async function analyzeBareRepo(
         cohort = await computeCohort(gitDir, sha);
         if (store) await store.setCohort(sha, cohort);
       }
-      cohortBySha.set(sha, cohort.byYear);
+      cohortBySha.set(sha, cohort);
       options.onProgress?.({ type: "cohort", index: ++ci, total, date: firstDate.get(sha)!, cached: wasCached });
     }
   }
@@ -174,7 +174,7 @@ export async function analyzeBareRepo(
       sha: p.sha,
       byRole: c.byRole,
       byPackage: c.byPackage,
-      cohortByYear: cohortBySha.get(p.sha),
+      cohort: cohortBySha.get(p.sha),
     };
   });
 

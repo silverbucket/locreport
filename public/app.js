@@ -36,9 +36,16 @@ let chart = null;
 let report = null;
 let view = "role"; // "role" | "pkg" | "age"
 let metric = "app";
+let cohortRole = "app"; // "app" | "test" | ... | "all"
 let stacked = true;
 
-const hasCohort = () => report && report.snapshots.some((s) => s.cohortByYear);
+const hasCohort = () => report && report.snapshots.some((s) => s.cohort);
+
+/** Year->lines for a snapshot's cohort, scoped to the selected role. */
+function cohortYears(snapshot) {
+  if (!snapshot.cohort) return {};
+  return cohortRole === "all" ? snapshot.cohort.byYear : snapshot.cohort.byRoleYear[cohortRole] || {};
+}
 
 /** Reduce a role->bucket map to headline numbers (mirrors src/report.ts). */
 function summarize(byRole) {
@@ -108,7 +115,7 @@ function packageRows() {
 /** Latest-snapshot code-age table HTML, or "" if no cohort data. */
 function ageTableHtml() {
   const last = report.snapshots[report.snapshots.length - 1];
-  const byYear = (last && last.cohortByYear) || {};
+  const byYear = last ? cohortYears(last) : {};
   const years = Object.keys(byYear).sort();
   if (!years.length) return "";
   const total = years.reduce((s, y) => s + byYear[y], 0);
@@ -228,11 +235,11 @@ function drawChart(labels, datasets, yTitle) {
 // each snapshot. Older years sort to the bottom of the stack.
 function cohortSeries() {
   const yearSet = new Set();
-  for (const s of report.snapshots) for (const y of Object.keys(s.cohortByYear || {})) yearSet.add(y);
+  for (const s of report.snapshots) for (const y of Object.keys(cohortYears(s))) yearSet.add(y);
   const years = [...yearSet].sort();
   return years.map((y) => ({
     year: y,
-    values: report.snapshots.map((s) => (s.cohortByYear ? s.cohortByYear[y] || 0 : 0)),
+    values: report.snapshots.map((s) => cohortYears(s)[y] || 0),
   }));
 }
 
@@ -260,7 +267,8 @@ function renderChart() {
         tension: 0.2,
       };
     });
-    drawChart(labels, datasets, "Code lines by year authored (all counted roles)");
+    const roleLabel = cohortRole === "all" ? "all counted roles" : METRIC_LABEL[cohortRole];
+    drawChart(labels, datasets, `${roleLabel} — code lines by year authored`);
     return;
   }
 
@@ -343,10 +351,10 @@ function exportCsv() {
     download(`locreport-${repoSlug()}-packages.csv`, toCsv(packageRows(), "Package", "pkg"), "text/csv");
   } else if (view === "age") {
     const last = report.snapshots[report.snapshots.length - 1];
-    const byYear = (last && last.cohortByYear) || {};
+    const byYear = last ? cohortYears(last) : {};
     const lines = ["Year,Lines"];
     for (const y of Object.keys(byYear).sort()) lines.push(`${y},${byYear[y]}`);
-    download(`locreport-${repoSlug()}-codeage.csv`, lines.join("\n"), "text/csv");
+    download(`locreport-${repoSlug()}-codeage-${cohortRole}.csv`, lines.join("\n"), "text/csv");
   } else {
     download(`locreport-${repoSlug()}.csv`, toCsv(intervalRows(), "Date", "date"), "text/csv");
   }
@@ -367,6 +375,7 @@ function syncUrl(extra) {
     interval: $("interval").value,
     view,
     metric,
+    role: cohortRole,
     stacked: stacked ? "1" : "0",
     ...extra,
   });
@@ -379,6 +388,7 @@ function setView(next) {
   $("view-pkg").classList.toggle("active", view === "pkg");
   $("view-age").classList.toggle("active", view === "age");
   $("metric-wrap").hidden = view !== "pkg";
+  $("cohort-role-wrap").hidden = view !== "age";
   syncUrl();
   if (!report) return;
   // Code age needs a (slower) blame pass; fetch it lazily the first time.
@@ -395,6 +405,14 @@ $("view-age").addEventListener("click", () => setView("age"));
 $("metric").addEventListener("change", (e) => {
   metric = e.target.value;
   if (report && view === "pkg") renderChart();
+  syncUrl();
+});
+$("cohort-role").addEventListener("change", (e) => {
+  cohortRole = e.target.value;
+  if (report && view === "age") {
+    renderChart();
+    renderTables();
+  }
   syncUrl();
 });
 $("stacked").addEventListener("change", (e) => {
@@ -475,6 +493,10 @@ $("form").addEventListener("submit", (ev) => {
   if (q.get("metric") && METRIC_LABEL[q.get("metric")]) {
     metric = q.get("metric");
     $("metric").value = metric;
+  }
+  if (q.get("role")) {
+    cohortRole = q.get("role");
+    $("cohort-role").value = cohortRole;
   }
   if (q.get("stacked") === "0") {
     stacked = false;

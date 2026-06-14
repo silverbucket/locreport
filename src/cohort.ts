@@ -2,14 +2,9 @@ import { classify } from "./classifier.js";
 import { blameLines, listTreeFiles } from "./git.js";
 import { detectLanguage } from "./languages.js";
 import { classifyLines } from "./linecount.js";
-import { EXCLUDED_ROLES } from "./types.js";
+import { EXCLUDED_ROLES, type Cohort, type Role } from "./types.js";
 
-/** Code-age breakdown for one commit: surviving lines grouped by author-year. */
-export interface CohortResult {
-  total: number;
-  /** Year (as string) -> surviving line count. */
-  byYear: Record<string, number>;
-}
+export type CohortResult = Cohort;
 
 /** Run `fn` over `items` with at most `limit` concurrent executions. */
 async function pool<T>(items: T[], limit: number, fn: (item: T) => Promise<void>): Promise<void> {
@@ -31,24 +26,25 @@ async function pool<T>(items: T[], limit: number, fn: (item: T) => Promise<void>
 export async function computeCohort(gitDir: string, sha: string, concurrency = 8): Promise<CohortResult> {
   const files = await listTreeFiles(gitDir, sha);
   const included = files
-    .map((path) => ({ path, syntax: detectLanguage(path) }))
-    .filter((f) => f.syntax !== null && !EXCLUDED_ROLES.has(classify(f.path)));
+    .map((path) => ({ path, role: classify(path), syntax: detectLanguage(path) }))
+    .filter((f) => f.syntax !== null && !EXCLUDED_ROLES.has(f.role));
 
   const byYear: Record<string, number> = {};
-  let total = 0;
+  const byRoleYear: Partial<Record<Role, Record<string, number>>> = {};
 
-  await pool(included, concurrency, async ({ path, syntax }) => {
+  await pool(included, concurrency, async ({ path, role, syntax }) => {
     const lines = await blameLines(gitDir, sha, path);
     if (lines.length === 0) return;
     // Classify each physical line; count only the ones that are code.
     const kinds = classifyLines(lines.map((l) => l.content).join("\n"), syntax!);
+    const roleBucket = (byRoleYear[role] ??= {});
     for (let i = 0; i < lines.length; i++) {
       if (kinds[i] !== "code") continue;
       const key = String(lines[i]!.year);
       byYear[key] = (byYear[key] ?? 0) + 1;
-      total += 1;
+      roleBucket[key] = (roleBucket[key] ?? 0) + 1;
     }
   });
 
-  return { total, byYear };
+  return { byYear, byRoleYear };
 }
