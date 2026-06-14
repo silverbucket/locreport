@@ -149,7 +149,7 @@ export function formatCohort(report: Report): string {
   });
 
   return [
-    `Code age (latest snapshot: ${last.date}) — ${total.toLocaleString("en-US")} surviving lines:`,
+    `Code age (latest snapshot: ${last.date}) — ${total.toLocaleString("en-US")} code lines (all counted roles):`,
     "",
     `${"Year".padEnd(yearW)}  ${"Lines".padStart(numW)}  Share`,
     `${"-".repeat(yearW)}  ${"-".repeat(numW)}  -----`,

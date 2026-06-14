@@ -119,29 +119,37 @@ export async function listTreeFiles(gitDir: string, sha: string): Promise<string
   return out.split("\n").filter((l) => l.length > 0);
 }
 
+export interface BlameLine {
+  /** Author year of the line. */
+  year: number;
+  /** The line's text content. */
+  content: string;
+}
+
 /**
- * Blame `path` at `sha` and return a map of author-year -> line count. Returns
- * an empty map if the file can't be blamed (binary, submodule, gone, etc.).
+ * Blame `path` at `sha` and return each line's author-year + content, in file
+ * order. Returns [] if the file can't be blamed (binary, submodule, gone, etc.).
  */
-export async function blameFileYears(gitDir: string, sha: string, path: string): Promise<Map<number, number>> {
-  const years = new Map<number, number>();
+export async function blameLines(gitDir: string, sha: string, path: string): Promise<BlameLine[]> {
+  const result: BlameLine[] = [];
   try {
     const out = await git(["--git-dir", gitDir, "blame", "--line-porcelain", sha, "--", path], {
       maxBuffer: 256 * 1024 * 1024,
     });
+    let year = 0;
     for (const line of out.split("\n")) {
       if (line.startsWith("author-time ")) {
         const epoch = Number(line.slice("author-time ".length).trim());
-        if (Number.isFinite(epoch)) {
-          const year = new Date(epoch * 1000).getUTCFullYear();
-          years.set(year, (years.get(year) ?? 0) + 1);
-        }
+        if (Number.isFinite(epoch)) year = new Date(epoch * 1000).getUTCFullYear();
+      } else if (line.startsWith("\t")) {
+        // Porcelain prefixes the actual line content with a tab.
+        result.push({ year, content: line.slice(1) });
       }
     }
   } catch {
     // Unblameable file — skip it.
   }
-  return years;
+  return result;
 }
 
 /** Extract the tree of `sha` into `destDir` (which should already exist). */

@@ -21,6 +21,9 @@ import type { CommitCounts } from "./types.js";
  */
 // v2: string-literal-aware counting changed code/comment results.
 const CACHE_VERSION = 2;
+// Cohort versioned separately so cohort-only changes don't invalidate counts.
+// v2: cohort counts code lines only (was all physical lines across roles).
+const COHORT_VERSION = 2;
 
 function defaultRoot(): string {
   return process.env.LOCREPORT_CACHE_DIR ?? path.join(homedir(), ".cache", "locreport");
@@ -116,7 +119,7 @@ class DiskCache implements AnalysisCache {
   async getCohort(sha: string): Promise<CohortResult | null> {
     try {
       const parsed = JSON.parse(await readFile(this.cohortPath(sha), "utf8")) as CohortFile;
-      if (parsed.v !== CACHE_VERSION || !parsed.cohort) return null;
+      if (parsed.v !== COHORT_VERSION || !parsed.cohort) return null;
       return parsed.cohort;
     } catch {
       return null;
@@ -124,7 +127,7 @@ class DiskCache implements AnalysisCache {
   }
 
   async setCohort(sha: string, cohort: CohortResult): Promise<void> {
-    await this.writeAtomic(this.cohortPath(sha), { v: CACHE_VERSION, cohort } satisfies CohortFile);
+    await this.writeAtomic(this.cohortPath(sha), { v: COHORT_VERSION, cohort } satisfies CohortFile);
   }
 }
 

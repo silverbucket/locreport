@@ -260,7 +260,7 @@ function renderChart() {
         tension: 0.2,
       };
     });
-    drawChart(labels, datasets, "Surviving lines by year authored");
+    drawChart(labels, datasets, "Code lines by year authored (all counted roles)");
     return;
   }
 

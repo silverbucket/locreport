@@ -207,6 +207,14 @@ describe("analyzeBareRepo (end-to-end, builtin counter)", () => {
     const totalLast = Object.values(last.cohortByYear!).reduce((a, b) => a + b, 0);
     const totalFirst = Object.values(first.cohortByYear!).reduce((a, b) => a + b, 0);
     expect(totalLast).toBeGreaterThan(totalFirst);
+
+    // The cohort counts code lines only, so its total reconciles with the
+    // snapshot's "Total" counted code (sum of code over non-excluded roles).
+    const countedCode = (["app", "test", "config", "docs", "data"] as const).reduce(
+      (s, r) => s + last.byRole[r].code,
+      0,
+    );
+    expect(totalLast).toBe(countedCode);
   });
 
   it("caches per-commit counts so a re-run does no counting", async () => {

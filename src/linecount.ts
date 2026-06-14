@@ -59,8 +59,14 @@ function scanToClose(line: string, from: number, close: string, escape: boolean)
   return -1;
 }
 
-export function countText(text: string, syntax: Syntax): LineCounts {
-  const counts: LineCounts = { code: 0, comment: 0, blank: 0 };
+export type LineKind = "code" | "comment" | "blank";
+
+/**
+ * Classify every physical line of `text` as code / comment / blank, in order.
+ * The returned array has one entry per physical line.
+ */
+export function classifyLines(text: string, syntax: Syntax): LineKind[] {
+  const out: LineKind[] = [];
   const lines = text.split("\n");
   if (lines.length > 0 && lines[lines.length - 1] === "") lines.pop();
 
@@ -71,7 +77,7 @@ export function countText(text: string, syntax: Syntax): LineCounts {
     const line = raw.replace(/\r$/, "");
     if (line.trim() === "") {
       // Blank lines stay blank even inside an open block comment / string.
-      counts.blank++;
+      out.push("blank");
       continue;
     }
 
@@ -144,10 +150,14 @@ export function countText(text: string, syntax: Syntax): LineCounts {
       i++;
     }
 
-    if (hasCode) counts.code++;
-    else if (hasComment) counts.comment++;
-    else counts.blank++;
+    out.push(hasCode ? "code" : hasComment ? "comment" : "blank");
   }
 
+  return out;
+}
+
+export function countText(text: string, syntax: Syntax): LineCounts {
+  const counts: LineCounts = { code: 0, comment: 0, blank: 0 };
+  for (const kind of classifyLines(text, syntax)) counts[kind]++;
   return counts;
 }
