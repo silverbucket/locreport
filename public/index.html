@@ -28,20 +28,39 @@
           <option value="6m">Every 6 months</option>
           <option value="1y" selected>Yearly</option>
         </select>
-        <label class="check">
-          <input id="byPackage" type="checkbox" /> Per package
-        </label>
         <button id="go" type="submit">Analyze</button>
       </form>
 
       <p id="status" class="status" hidden></p>
 
       <section id="results" hidden>
+        <div class="controls">
+          <div class="segmented" role="tablist">
+            <button id="view-role" class="seg active" type="button">By role</button>
+            <button id="view-pkg" class="seg" type="button">By package</button>
+          </div>
+          <label id="metric-wrap" class="metric" hidden>
+            Metric
+            <select id="metric">
+              <option value="app">App code</option>
+              <option value="test">Tests</option>
+              <option value="config">Config</option>
+              <option value="docs">Docs</option>
+              <option value="data">Data</option>
+              <option value="comments">Comments</option>
+              <option value="countedCode">Total (counted)</option>
+            </select>
+          </label>
+        </div>
+
         <div class="chart-wrap">
           <canvas id="chart"></canvas>
         </div>
-        <h2>Per interval</h2>
-        <div id="table" class="table-wrap"></div>
+
+        <section id="role-tables">
+          <h2>Per interval</h2>
+          <div id="table" class="table-wrap"></div>
+        </section>
         <section id="packages" hidden>
           <h2>Per package <span id="pkg-date" class="muted"></span></h2>
           <div id="pkg-table" class="table-wrap"></div>

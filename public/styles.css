@@ -104,13 +104,50 @@ button:disabled {
   color: #f87171;
 }
 
+.controls {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin: 20px 0 0;
+}
+
+.segmented {
+  display: inline-flex;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.seg {
+  background: var(--panel);
+  color: var(--muted);
+  border: 0;
+  border-radius: 0;
+  padding: 8px 16px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.seg.active {
+  background: var(--accent);
+  color: #fff;
+}
+
+.metric {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--muted);
+}
+
 .chart-wrap {
   background: var(--panel);
   border: 1px solid var(--border);
   border-radius: 12px;
   padding: 16px;
-  margin: 20px 0;
-  height: 380px;
+  margin: 16px 0 20px;
+  height: 420px;
 }
 
 h2 {

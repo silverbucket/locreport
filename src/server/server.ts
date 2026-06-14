@@ -43,7 +43,9 @@ async function handleAnalyze(req: IncomingMessage, res: ServerResponse, url: URL
   const repo = url.searchParams.get("repo")?.trim() ?? "";
   const intervalRaw = url.searchParams.get("interval") ?? "1y";
   const interval: Interval = isInterval(intervalRaw) ? intervalRaw : "1y";
-  const byPackage = ["1", "true", "yes"].includes((url.searchParams.get("byPackage") ?? "").toLowerCase());
+  // The web UI always wants per-package data so the "By package" view works
+  // without a re-run; opt out only with an explicit byPackage=0.
+  const byPackage = (url.searchParams.get("byPackage") ?? "1") !== "0";
   const branch = url.searchParams.get("branch")?.trim() || undefined;
 
   res.writeHead(200, {

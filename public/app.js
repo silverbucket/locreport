@@ -2,15 +2,28 @@
 
 const $ = (id) => document.getElementById(id);
 const EXCLUDED = new Set(["build", "vendored"]);
-const COUNTED = [
+const ROLE_SERIES = [
   ["app", "App", "#4f8cff"],
   ["test", "Tests", "#2dd4bf"],
   ["config", "Config", "#f59e0b"],
   ["docs", "Docs", "#a78bfa"],
   ["data", "Data", "#f472b6"],
 ];
+const METRIC_LABEL = {
+  app: "App code",
+  test: "Tests",
+  config: "Config",
+  docs: "Docs",
+  data: "Data",
+  comments: "Comments",
+  countedCode: "Total (counted)",
+};
+const MAX_PKG_SERIES = 14; // group the long tail into "Other" beyond this
 
 let chart = null;
+let report = null;
+let view = "role"; // "role" | "pkg"
+let metric = "app";
 
 /** Reduce a role->bucket map to headline numbers (mirrors src/report.ts). */
 function summarize(byRole) {
@@ -46,6 +59,10 @@ function esc(s) {
   );
 }
 
+// ---------------------------------------------------------------------------
+// Tables
+// ---------------------------------------------------------------------------
+
 function table(rows, firstHeader, firstKey) {
   const cols = [
     [firstKey, firstHeader],
@@ -64,7 +81,6 @@ function table(rows, firstHeader, firstKey) {
       const tds = cols
         .map(([k]) => {
           const cls = k === "excluded" ? ' class="excl"' : "";
-          // First column is text (date / repo-controlled package name) → escape.
           const val = k === firstKey ? esc(r[firstKey]) : n(r[k]);
           return `<td${cls}>${val}</td>`;
         })
@@ -75,20 +91,68 @@ function table(rows, firstHeader, firstKey) {
   return `<table>${thead}<tbody>${body}</tbody></table>`;
 }
 
-function renderChart(report) {
-  const labels = report.snapshots.map((s) => s.date);
-  const summaries = report.snapshots.map((s) => summarize(s.byRole));
-  const datasets = COUNTED.map(([key, label, color]) => ({
-    label,
-    data: summaries.map((s) => s[key]),
-    backgroundColor: color + "cc",
-    borderColor: color,
-    borderWidth: 1,
-    fill: true,
-    pointRadius: 0,
-    tension: 0.2,
-  }));
+function renderTables() {
+  const rows = report.snapshots.map((s) => ({ date: s.date, ...summarize(s.byRole) }));
+  $("table").innerHTML = table(rows, "Date", "date");
 
+  const last = report.snapshots[report.snapshots.length - 1];
+  const pkgs = (last && last.byPackage) || [];
+  if (pkgs.length) {
+    const pkgRows = pkgs.map((p) => ({ pkg: p.name || "(root)", ...summarize(p.byRole) }));
+    $("pkg-table").innerHTML = table(pkgRows, "Package", "pkg");
+    $("pkg-date").textContent = `(latest snapshot: ${last.date})`;
+  }
+  $("role-tables").hidden = view !== "role";
+  $("packages").hidden = view !== "pkg" || !pkgs.length;
+}
+
+// ---------------------------------------------------------------------------
+// Per-package series (one value per package per snapshot, for a chosen metric)
+// ---------------------------------------------------------------------------
+
+function packageSeries(metricKey) {
+  // Latest name per id (names can in principle change over time).
+  const nameById = new Map();
+  for (const s of report.snapshots) for (const p of s.byPackage || []) nameById.set(p.id, p.name || "(root)");
+
+  const ids = [...nameById.keys()];
+  const valueById = new Map(
+    ids.map((id) => [
+      id,
+      report.snapshots.map((s) => {
+        const p = (s.byPackage || []).find((x) => x.id === id);
+        return p ? summarize(p.byRole)[metricKey] : 0;
+      }),
+    ]),
+  );
+
+  const lastOf = (arr) => arr[arr.length - 1] || 0;
+  ids.sort((a, b) => lastOf(valueById.get(b)) - lastOf(valueById.get(a)));
+
+  let series = ids.map((id) => ({ label: nameById.get(id), values: valueById.get(id) }));
+
+  // Group the long tail into a single "Other" band for readability.
+  if (series.length > MAX_PKG_SERIES) {
+    const head = series.slice(0, MAX_PKG_SERIES - 1);
+    const tail = series.slice(MAX_PKG_SERIES - 1);
+    const other = report.snapshots.map((_, i) => tail.reduce((sum, s) => sum + s.values[i], 0));
+    head.push({ label: `Other (${tail.length})`, values: other, other: true });
+    series = head;
+  }
+  return series;
+}
+
+// ---------------------------------------------------------------------------
+// Charts
+// ---------------------------------------------------------------------------
+
+function pkgColor(i, total, isOther) {
+  if (isOther) return { border: "#6b7280", fill: "#6b7280cc" };
+  const hue = Math.round((i * 360) / Math.max(total, 1));
+  return { border: `hsl(${hue} 62% 55%)`, fill: `hsl(${hue} 62% 55% / 0.8)` };
+}
+
+function drawChart(labels, datasets, yTitle) {
   const cfg = {
     type: "line",
     data: { labels, datasets },
@@ -102,35 +166,75 @@ function renderChart(report) {
           stacked: true,
           grid: { color: "#262b36" },
           ticks: { color: "#98a2b3", callback: (v) => n(v) },
-          title: { display: true, text: "Lines of code", color: "#98a2b3" },
+          title: { display: true, text: yTitle, color: "#98a2b3" },
         },
       },
       plugins: {
-        legend: { labels: { color: "#e6e9ef" } },
+        legend: { labels: { color: "#e6e9ef", boxWidth: 12 } },
         tooltip: { callbacks: { label: (c) => `${c.dataset.label}: ${n(c.parsed.y)}` } },
       },
     },
   };
-
   if (chart) chart.destroy();
   chart = new Chart($("chart"), cfg);
 }
 
-function renderTables(report) {
-  const rows = report.snapshots.map((s) => ({ date: s.date, ...summarize(s.byRole) }));
-  $("table").innerHTML = table(rows, "Date", "date");
+function renderChart() {
+  const labels = report.snapshots.map((s) => s.date);
 
-  const last = report.snapshots[report.snapshots.length - 1];
-  const pkgs = last && last.byPackage;
-  if (pkgs && pkgs.length) {
-    const pkgRows = pkgs.map((p) => ({ pkg: p.name || "(root)", ...summarize(p.byRole) }));
-    $("pkg-table").innerHTML = table(pkgRows, "Package", "pkg");
-    $("pkg-date").textContent = `(latest snapshot: ${last.date})`;
-    $("packages").hidden = false;
-  } else {
-    $("packages").hidden = true;
+  if (view === "role") {
+    const summaries = report.snapshots.map((s) => summarize(s.byRole));
+    const datasets = ROLE_SERIES.map(([key, label, color]) => ({
+      label,
+      data: summaries.map((s) => s[key]),
+      backgroundColor: color + "cc",
+      borderColor: color,
+      borderWidth: 1,
+      fill: true,
+      pointRadius: 0,
+      tension: 0.2,
+    }));
+    drawChart(labels, datasets, "Lines of code");
+    return;
   }
+
+  const series = packageSeries(metric);
+  const datasets = series.map((s, i) => {
+    const color = pkgColor(i, series.length, s.other);
+    return {
+      label: s.label,
+      data: s.values,
+      backgroundColor: color.fill,
+      borderColor: color.border,
+      borderWidth: 1,
+      fill: true,
+      pointRadius: 0,
+      tension: 0.2,
+    };
+  });
+  drawChart(labels, datasets, `${METRIC_LABEL[metric]} — lines of code`);
 }
+
+// ---------------------------------------------------------------------------
+// View wiring
+// ---------------------------------------------------------------------------
+
+function setView(next) {
+  view = next;
+  $("view-role").classList.toggle("active", view === "role");
+  $("view-pkg").classList.toggle("active", view === "pkg");
+  $("metric-wrap").hidden = view !== "pkg";
+  if (!report) return;
+  renderChart();
+  renderTables();
+}
+
+$("view-role").addEventListener("click", () => setView("role"));
+$("view-pkg").addEventListener("click", () => setView("pkg"));
+$("metric").addEventListener("change", (e) => {
+  metric = e.target.value;
+  if (report && view === "pkg") renderChart();
+});
 
 function setStatus(msg, isError) {
   const el = $("status");
@@ -144,11 +248,7 @@ $("form").addEventListener("submit", (ev) => {
   const repo = $("repo").value.trim();
   if (!repo) return;
 
-  const params = new URLSearchParams({
-    repo,
-    interval: $("interval").value,
-    byPackage: $("byPackage").checked ? "1" : "0",
-  });
+  const params = new URLSearchParams({ repo, interval: $("interval").value });
 
   $("go").disabled = true;
   $("results").hidden = true;
@@ -157,20 +257,20 @@ $("form").addEventListener("submit", (ev) => {
   const es = new EventSource(`/api/analyze?${params}`);
 
   es.addEventListener("progress", (e) => {
-    const ev = JSON.parse(e.data);
-    if (ev.type === "cloning") setStatus(`Cloning ${ev.repo}…`);
-    else if (ev.type === "resolved")
-      setStatus(`Branch ${ev.branch} · counter "${ev.counter}" · ${ev.snapshots} snapshots…`);
-    else if (ev.type === "snapshot") setStatus(`Analyzing ${ev.index}/${ev.total} — ${ev.date}…`);
+    const p = JSON.parse(e.data);
+    if (p.type === "cloning") setStatus(`Cloning ${p.repo}…`);
+    else if (p.type === "resolved")
+      setStatus(`Branch ${p.branch} · counter "${p.counter}" · ${p.snapshots} snapshots…`);
+    else if (p.type === "snapshot") setStatus(`Analyzing ${p.index}/${p.total} — ${p.date}…`);
   });
 
   es.addEventListener("done", (e) => {
-    const report = JSON.parse(e.data);
+    report = JSON.parse(e.data);
     es.close();
     $("go").disabled = false;
     setStatus(`Done — ${report.snapshots.length} snapshots of ${report.repoUrl}`);
-    renderChart(report);
-    renderTables(report);
+    renderChart();
+    renderTables();
     $("results").hidden = false;
   });
 
@@ -181,7 +281,6 @@ $("form").addEventListener("submit", (ev) => {
   });
 
   es.onerror = () => {
-    // Fires on network drop or server close without a 'done'/'fail'.
     if (es.readyState === EventSource.CLOSED && $("go").disabled) {
       $("go").disabled = false;
       setStatus("Connection closed before completion.", true);
