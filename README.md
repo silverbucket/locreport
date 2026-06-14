@@ -79,6 +79,24 @@ to `(root)`. Detection runs per commit, so packages appear/grow over time.
 The CLI table shows the latest snapshot; the full per-snapshot package history
 is in `--json` output for charting.
 
+## Web UI
+
+```bash
+pnpm web          # → http://localhost:4317  (set PORT to change)
+```
+
+Enter a GitHub repo, pick an interval, optionally tick **Per package**, and hit
+Analyze. The page streams live progress over Server-Sent Events while the repo
+is cloned and sampled, then renders:
+
+- a **stacked-area chart** of LOC by role over time, and
+- a **per-interval table** (plus a **per-package table** when enabled).
+
+It's a dependency-light Node HTTP server (`src/server/server.ts`) that reuses the
+same engine as the CLI. Chart.js is self-hosted (no CDN), and the page runs under
+a locked-down `default-src 'self'` CSP. Repo-controlled strings (package names)
+are HTML-escaped before rendering. No persistence yet — each analysis re-clones.
+
 ## Counting backend
 
 Two interchangeable backends behind one interface (`src/counter.ts`):

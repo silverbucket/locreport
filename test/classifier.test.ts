@@ -30,6 +30,9 @@ describe("classify", () => {
     ["tsconfig.json", "build"],
     ["CMakeLists.txt", "build"],
     [".gitignore", "build"],
+    ["scripts/release.js", "build"],
+    ["tools/codegen.ts", "build"],
+    ["packages/api/scripts/build.ts", "build"],
 
     // vendored / generated (excluded)
     ["node_modules/left-pad/index.js", "vendored"],

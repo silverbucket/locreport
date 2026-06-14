@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>locreport — LOC over time, by role</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <header>
+      <h1>locreport</h1>
+      <p class="tagline">Lines of code over time for a GitHub repo, split by role.</p>
+    </header>
+
+    <main>
+      <form id="form" autocomplete="off">
+        <input
+          id="repo"
+          name="repo"
+          type="text"
+          placeholder="owner/repo  or  https://github.com/owner/repo"
+          required
+          spellcheck="false"
+        />
+        <select id="interval" name="interval" title="Sampling interval">
+          <option value="1m">Monthly</option>
+          <option value="3m">Quarterly</option>
+          <option value="6m">Every 6 months</option>
+          <option value="1y" selected>Yearly</option>
+        </select>
+        <label class="check">
+          <input id="byPackage" type="checkbox" /> Per package
+        </label>
+        <button id="go" type="submit">Analyze</button>
+      </form>
+
+      <p id="status" class="status" hidden></p>
+
+      <section id="results" hidden>
+        <div class="chart-wrap">
+          <canvas id="chart"></canvas>
+        </div>
+        <h2>Per interval</h2>
+        <div id="table" class="table-wrap"></div>
+        <section id="packages" hidden>
+          <h2>Per package <span id="pkg-date" class="muted"></span></h2>
+          <div id="pkg-table" class="table-wrap"></div>
+        </section>
+      </section>
+    </main>
+
+    <script src="/vendor/chart.js"></script>
+    <script src="/app.js"></script>
+  </body>
+</html>

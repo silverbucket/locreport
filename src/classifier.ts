@@ -102,6 +102,13 @@ export const DEFAULT_RULES: Rule[] = [
   },
   {
     role: "build",
+    label: "build / dev tooling directory",
+    // Conventionally repo tooling (release/build/dev/codegen scripts), not app
+    // code. Projects that ship real source under scripts/ can override this.
+    test: (p) => hasSegment(p, ["scripts", "tools", "tooling"]),
+  },
+  {
+    role: "build",
     label: "build tool / task runner file",
     test: (p) =>
       [

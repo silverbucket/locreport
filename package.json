@@ -9,6 +9,7 @@
   "scripts": {
     "analyze": "tsx src/cli.ts",
     "dev": "tsx src/cli.ts",
+    "web": "tsx src/server/server.ts",
     "build": "tsc",
     "start": "node dist/cli.js",
     "test": "vitest run",
@@ -30,5 +31,8 @@
     "tsx": "^4.22.4",
     "typescript": "^5.9.3",
     "vitest": "^2.1.9"
+  },
+  "dependencies": {
+    "chart.js": "^4.5.1"
   }
 }
