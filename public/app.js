@@ -123,30 +123,34 @@ function packageSeries(metricKey) {
   const nameById = new Map();
   for (const s of report.snapshots) for (const p of s.byPackage || []) nameById.set(p.id, p.name || "(root)");
 
-  const ids = [...nameById.keys()];
-  const valueById = new Map(
-    ids.map((id) => [
-      id,
-      report.snapshots.map((s) => {
-        const p = (s.byPackage || []).find((x) => x.id === id);
-        return p ? summarize(p.byRole)[metricKey] : 0;
-      }),
-    ]),
-  );
+  // Numeric value per package per snapshot (0 where the package is absent).
+  let entries = [...nameById.keys()].map((id) => ({
+    label: nameById.get(id),
+    values: report.snapshots.map((s) => {
+      const p = (s.byPackage || []).find((x) => x.id === id);
+      return p ? summarize(p.byRole)[metricKey] : 0;
+    }),
+  }));
 
-  const lastOf = (arr) => arr[arr.length - 1] || 0;
-  ids.sort((a, b) => lastOf(valueById.get(b)) - lastOf(valueById.get(a)));
+  // Drop packages that are zero for this metric across the entire timeline.
+  entries = entries.filter((e) => e.values.some((v) => v > 0));
 
-  let series = ids.map((id) => ({ label: nameById.get(id), values: valueById.get(id) }));
+  // Largest band at the bottom of the stack (order by peak size over time).
+  const peak = (e) => Math.max(...e.values);
+  entries.sort((a, b) => peak(b) - peak(a));
 
-  if (series.length > MAX_PKG_SERIES) {
-    const head = series.slice(0, MAX_PKG_SERIES - 1);
-    const tail = series.slice(MAX_PKG_SERIES - 1);
-    const other = report.snapshots.map((_, i) => tail.reduce((sum, s) => sum + s.values[i], 0));
+  // Collapse the long tail for very large monorepos.
+  if (entries.length > MAX_PKG_SERIES) {
+    const head = entries.slice(0, MAX_PKG_SERIES - 1);
+    const tail = entries.slice(MAX_PKG_SERIES - 1);
+    const other = report.snapshots.map((_, i) => tail.reduce((sum, e) => sum + e.values[i], 0));
     head.push({ label: `Other (${tail.length})`, values: other, other: true });
-    series = head;
+    entries = head;
   }
-  return series;
+
+  // Render zero spans as gaps (null) so a package isn't drawn before it exists
+  // or after it's removed — only where it actually has lines.
+  return entries.map((e) => ({ ...e, values: e.values.map((v) => (v > 0 ? v : null)) }));
 }
 
 // ---------------------------------------------------------------------------
