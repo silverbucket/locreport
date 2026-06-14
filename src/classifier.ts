@@ -82,6 +82,7 @@ export const DEFAULT_RULES: Rule[] = [
         "package-lock.json",
         "yarn.lock",
         "pnpm-lock.yaml",
+        "bun.lock",
         "npm-shrinkwrap.json",
         "composer.lock",
         "gemfile.lock",
