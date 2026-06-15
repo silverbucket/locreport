@@ -6,6 +6,11 @@ docs vs. data — with comment lines tracked separately and build/vendored code
 excluded. Use it from the **command line**, as a **self-hosted web app**, or as a
 **Docker image**.
 
+A single lines-of-code total can't tell whether a project is growing because the
+application code is growing, or because tests, docs and config are accumulating
+around it. locreport counts each role separately, across the repository's whole
+history, so those trends move independently.
+
 ## How it works
 
 For a repo, at each interval boundary (yearly by default):
@@ -99,18 +104,18 @@ is in `--json` output for charting.
 pnpm web          # → http://localhost:4317  (set PORT to change)
 ```
 
-Enter a GitHub repo, pick an interval, optionally tick **Per package**, and hit
-Analyze. The page streams live progress over Server-Sent Events while the repo
-is cloned and sampled, then renders:
+Enter a GitHub repo, pick an interval, and hit **Analyze**. The page streams live
+progress over Server-Sent Events while the repo is cloned and sampled, then shows
+a chart and table with three switchable views:
 
-- a **stacked-area chart** of LOC by role over time, and
-- a **per-interval table** (plus a **per-package table** when enabled).
+- **By role** — stacked-area chart of LOC by role over time, with a per-interval table.
+- **By package** — the same over time for a chosen metric, with a per-package table (monorepo-aware).
+- **Code age** — surviving lines bucketed by the year they were authored (runs `git blame`, same as the CLI's `--cohort`).
 
-UI niceties: switch **By role / By package** (pick a metric), toggle **Stacked**
-(area/composition) vs unstacked **lines** (growth rates), click a legend entry to
-**isolate** a series, **export** the table as CSV or the full report as JSON, and
-**share the URL** — repo, interval, view, metric and stacked state are encoded in
-the query string and re-run automatically on load.
+Toggle **Stacked** (area/composition) vs unstacked **lines** (growth rates), click
+a legend entry to **isolate** a series, **export** the table as CSV or the full
+report as JSON, and **share the URL** — repo, interval, view, metric and stacked
+state are encoded in the query string and re-run automatically on load.
 
 It's a dependency-light Node HTTP server (`src/server/server.ts`) that reuses the
 same engine as the CLI. Chart.js is self-hosted (no CDN), and the page runs under
@@ -125,7 +130,7 @@ Run the published multi-arch image from GHCR:
 docker run -p 4317:4317 -v locreport-cache:/cache ghcr.io/silverbucket/locreport
 ```
 
-`:latest` tracks the most recent release; pin a version tag (e.g. `:1.0.0`) for
+`:latest` tracks the most recent release; pin a version tag (e.g. `:1.1.0`) for
 reproducible deploys, or use `:edge` to track `master`. To build locally instead:
 
 ```bash
