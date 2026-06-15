@@ -106,9 +106,11 @@ export class ClocCounter implements Counter {
   constructor(private readonly bin = "cloc") {}
 
   async count(dir: string): Promise<FileCount[]> {
+    // cloc does not follow symlinks by default, which is what we want when
+    // scanning an extracted (untrusted) tree — so no symlink flag is passed.
     const { stdout } = await execFileAsync(
       this.bin,
-      ["--json", "--by-file", "--quiet", "--follow-links=no", dir],
+      ["--json", "--by-file", "--quiet", dir],
       { maxBuffer: 64 * 1024 * 1024 },
     );
     // cloc prints nothing for an empty tree; treat that as no files.

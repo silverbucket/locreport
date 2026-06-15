@@ -1,8 +1,8 @@
-import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
+import { chmod, mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { BuiltinCounter, parseClocJson } from "../src/counter.js";
+import { BuiltinCounter, ClocCounter, parseClocJson } from "../src/counter.js";
 
 describe("parseClocJson", () => {
   it("parses --by-file output, skipping header and SUM", () => {
@@ -48,5 +48,41 @@ describe("BuiltinCounter (on a real directory)", () => {
     expect(Object.keys(byPath).sort()).toEqual(["main.py", "src/app.ts"]);
     expect(byPath["src/app.ts"]).toMatchObject({ language: "TypeScript", code: 2, comment: 1, blank: 1 });
     expect(byPath["main.py"]).toMatchObject({ language: "Python", code: 1, comment: 1 });
+  });
+});
+
+// Regression guard for the cloc invocation itself (the args, not just parsing):
+// real cloc rejects an argument-bearing --follow-links, so a stub reproduces
+// that failure. Without it, only parseClocJson was covered and a bad flag shipped.
+describe.skipIf(process.platform === "win32")("ClocCounter (stub binary)", () => {
+  let dir: string;
+  let stub: string;
+
+  beforeAll(async () => {
+    dir = await mkdtemp(path.join(tmpdir(), "locreport-cloc-"));
+    stub = path.join(dir, "cloc");
+    await writeFile(
+      stub,
+      [
+        "#!/bin/sh",
+        "# Mimic real cloc: error out on an argument-bearing --follow-links.",
+        'for a in "$@"; do',
+        "  case \"$a\" in --follow-links=*) echo 'Option follow-links does not take an argument' >&2; exit 1 ;; esac",
+        "done",
+        `cat <<'JSON'`,
+        '{"header":{"cloc_version":"2.02"},"src/index.ts":{"blank":1,"comment":2,"code":3,"language":"TypeScript"},"SUM":{"blank":1,"comment":2,"code":3}}',
+        "JSON",
+      ].join("\n"),
+    );
+    await chmod(stub, 0o755);
+  });
+
+  afterAll(async () => {
+    await rm(dir, { recursive: true, force: true });
+  });
+
+  it("invokes cloc with valid flags and parses its output", async () => {
+    const out = await new ClocCounter(stub).count(dir);
+    expect(out).toEqual([{ path: "src/index.ts", language: "TypeScript", code: 3, comment: 2, blank: 1 }]);
   });
 });
