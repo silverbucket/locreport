@@ -459,6 +459,7 @@ function runAnalysis() {
 
   $("go").disabled = true;
   $("results").hidden = true;
+  $("stage-empty").hidden = true;
   setStatus("Connecting…");
   setWorking(true);
 
@@ -490,6 +491,7 @@ function runAnalysis() {
     es.close();
     $("go").disabled = false;
     setWorking(false);
+    if (!report) $("stage-empty").hidden = false;
     setStatus(`Error: ${JSON.parse(e.data).message}`, true);
   });
 
@@ -497,6 +499,7 @@ function runAnalysis() {
     if (es.readyState === EventSource.CLOSED && $("go").disabled) {
       $("go").disabled = false;
       setWorking(false);
+      if (!report) $("stage-empty").hidden = false;
       setStatus("Connection closed before completion.", true);
     }
   };

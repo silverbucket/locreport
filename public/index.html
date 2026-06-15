@@ -40,138 +40,150 @@
       </header>
 
       <main>
-        <section class="hero">
-          <p class="kicker">Codebase archaeology</p>
-          <h1 class="hero-title">Lines of code,<br />over&nbsp;time.</h1>
-          <p class="hero-sub">
-            Point locreport at any public GitHub repository and watch its codebase grow — split by the
-            <em>role</em> each file plays, with comments tracked separately and build &amp; vendored noise filtered out.
-          </p>
-
-          <form id="form" autocomplete="off">
-            <label class="field">
-              <span class="sr-only">GitHub repository</span>
-              <input
-                id="repo"
-                name="repo"
-                type="text"
-                placeholder="owner/repo  ·  or a full github.com URL"
-                required
-                spellcheck="false"
-                autocapitalize="off"
-              />
-            </label>
-            <label class="field field-interval">
-              <span class="sr-only">Sampling interval</span>
-              <select id="interval" name="interval" title="Sampling interval">
-                <option value="1m">Monthly</option>
-                <option value="3m">Quarterly</option>
-                <option value="6m">Every 6 months</option>
-                <option value="1y" selected>Yearly</option>
-              </select>
-            </label>
-            <button id="go" type="submit">
-              Analyze
-              <svg class="go-arrow" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
-                <path d="M2 8h11M9 4l4 4-4 4" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" />
-              </svg>
-            </button>
-          </form>
-
-          <div class="examples">
-            <span class="examples-label">Try</span>
-            <button type="button" class="chip js-example" data-repo="erikbern/git-of-theseus">git-of-theseus</button>
-            <button type="button" class="chip js-example" data-repo="XAMPPRocky/tokei">tokei</button>
-            <button type="button" class="chip js-example" data-repo="sindresorhus/slugify">slugify</button>
-            <button type="button" class="chip js-example" data-repo="vuejs/core">vuejs/core</button>
-          </div>
-        </section>
-
-        <section class="rationale" aria-label="Why locreport exists">
-          <p class="kicker">Why locreport</p>
-          <p class="rationale-lead">Most line counters treat every line the same.</p>
-          <p class="rationale-body">
-            So a codebase looks like it does nothing but grow. Yet adding tests, comments and docs while
-            <em>shrinking</em> the application code means <strong>less to maintain, not more</strong> — and one big
-            number can't tell those apart. locreport separates the code you actually maintain from the tests, config,
-            docs and data around it, so you can see which one is really moving.
+        <section class="lede">
+          <h1 class="lede-title">See what a codebase is <span class="accentword">actually</span> made of.</h1>
+          <p class="lede-body">
+            Most line counters treat every line the same — so a codebase looks like it only ever grows. locreport
+            splits <em>every commit</em> by the role each file plays, so adding tests, comments and docs while
+            <em>shrinking</em> the app code you maintain reads as exactly that: <strong>less to maintain, not more.</strong>
           </p>
         </section>
 
-        <section class="legend-strip" aria-label="What the roles mean">
-          <ol class="roles">
-            <li><span class="dot" style="--c: #4f8cff"></span><b>App</b><span class="role-note">the actual application code</span></li>
-            <li><span class="dot" style="--c: #2dd4bf"></span><b>Tests</b><span class="role-note">specs, fixtures, e2e</span></li>
-            <li><span class="dot" style="--c: #f59e0b"></span><b>Config</b><span class="role-note">yaml, toml, manifests</span></li>
-            <li><span class="dot" style="--c: #a78bfa"></span><b>Docs</b><span class="role-note">markdown, rst</span></li>
-            <li><span class="dot" style="--c: #f472b6"></span><b>Data</b><span class="role-note">json, csv, xml</span></li>
-          </ol>
-          <p class="excluded-note">
-            Build files and vendored / generated code (<code>node_modules</code>, lockfiles, minified bundles) are
-            detected and <strong>excluded</strong> from the counts.
-          </p>
-        </section>
+        <div class="flow">
+          <section class="step" aria-label="Choose a repository">
+            <p class="step-tag">Query</p>
+            <form id="form" class="commandbar" autocomplete="off">
+              <span class="cb-prompt" aria-hidden="true">github.com/</span>
+              <label class="cb-field">
+                <span class="sr-only">GitHub repository</span>
+                <input
+                  id="repo"
+                  name="repo"
+                  type="text"
+                  placeholder="owner/repo"
+                  required
+                  spellcheck="false"
+                  autocapitalize="off"
+                />
+              </label>
+              <label class="cb-interval">
+                <span class="sr-only">Sampling interval</span>
+                <select id="interval" name="interval" title="Sampling interval">
+                  <option value="1m">Monthly</option>
+                  <option value="3m">Quarterly</option>
+                  <option value="6m">6-monthly</option>
+                  <option value="1y" selected>Yearly</option>
+                </select>
+              </label>
+              <button id="go" type="submit">
+                Analyze
+                <svg class="go-arrow" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+                  <path d="M2 8h11M9 4l4 4-4 4" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" />
+                </svg>
+              </button>
+            </form>
+          </section>
 
-        <p id="status" class="status" hidden></p>
+          <section class="step" aria-label="Results">
+            <p class="step-tag">Readout</p>
+            <div class="stage">
+              <div id="stage-empty" class="stage-empty">
+                <figure class="strata">
+                  <div class="strata-bar" aria-hidden="true">
+                    <span class="seg" style="--c: #4f8cff; --w: 47"></span>
+                    <span class="seg" style="--c: #2dd4bf; --w: 25"></span>
+                    <span class="seg" style="--c: #f59e0b; --w: 12"></span>
+                    <span class="seg" style="--c: #a78bfa; --w: 10"></span>
+                    <span class="seg" style="--c: #f472b6; --w: 6"></span>
+                  </div>
+                  <figcaption>
+                    Every line in a repo, sorted by what it's for. The <span class="hl" style="--c: #4f8cff">blue</span>
+                    band is the code you maintain — locreport tracks each band on its own, across the project's whole
+                    history.
+                  </figcaption>
+                </figure>
 
-        <section id="results" hidden>
-          <div class="controls">
-            <div class="segmented" role="tablist" aria-label="Chart view">
-              <button id="view-role" class="seg active" type="button">By role</button>
-              <button id="view-pkg" class="seg" type="button">By package</button>
-              <button id="view-age" class="seg" type="button" title="Surviving lines by year authored (runs git blame)">Code age</button>
+                <ul class="key">
+                  <li><span class="dot" style="--c: #4f8cff"></span><b>App</b> <span>the code you maintain</span></li>
+                  <li><span class="dot" style="--c: #2dd4bf"></span><b>Tests</b> <span>specs, fixtures, e2e</span></li>
+                  <li><span class="dot" style="--c: #f59e0b"></span><b>Config</b> <span>yaml, toml, manifests</span></li>
+                  <li><span class="dot" style="--c: #a78bfa"></span><b>Docs</b> <span>markdown, rst</span></li>
+                  <li><span class="dot" style="--c: #f472b6"></span><b>Data</b> <span>json, csv, xml</span></li>
+                  <li class="key-excl"><span class="dot dot-excl"></span>Build &amp; vendored code — detected and <em>excluded</em></li>
+                </ul>
+
+                <div class="presets">
+                  <span class="presets-label">Try one</span>
+                  <button type="button" class="chip js-example" data-repo="erikbern/git-of-theseus">git-of-theseus</button>
+                  <button type="button" class="chip js-example" data-repo="XAMPPRocky/tokei">tokei</button>
+                  <button type="button" class="chip js-example" data-repo="sindresorhus/slugify">slugify</button>
+                  <button type="button" class="chip js-example" data-repo="vuejs/core">vuejs/core</button>
+                </div>
+              </div>
+
+              <p id="status" class="status" hidden></p>
+
+              <section id="results" hidden>
+                <div class="controls">
+                  <div class="segmented" role="tablist" aria-label="Chart view">
+                    <button id="view-role" class="seg active" type="button">By role</button>
+                    <button id="view-pkg" class="seg" type="button">By package</button>
+                    <button id="view-age" class="seg" type="button" title="Surviving lines by year authored (runs git blame)">Code age</button>
+                  </div>
+                  <label id="metric-wrap" class="metric" hidden>
+                    <span>Metric</span>
+                    <select id="metric">
+                      <option value="app">App code</option>
+                      <option value="test">Tests</option>
+                      <option value="config">Config</option>
+                      <option value="docs">Docs</option>
+                      <option value="data">Data</option>
+                      <option value="comments">Comments</option>
+                      <option value="countedCode">Total (counted)</option>
+                    </select>
+                  </label>
+                  <label id="cohort-role-wrap" class="metric" hidden>
+                    <span>Role</span>
+                    <select id="cohort-role">
+                      <option value="app" selected>App code</option>
+                      <option value="test">Tests</option>
+                      <option value="config">Config</option>
+                      <option value="docs">Docs</option>
+                      <option value="data">Data</option>
+                      <option value="all">All counted</option>
+                    </select>
+                  </label>
+                  <label class="check" title="Stacked area (composition) vs overlaid lines (growth rates)">
+                    <input id="stacked" type="checkbox" checked /> <span>Stacked</span>
+                  </label>
+                  <span class="spacer"></span>
+                  <div class="exports">
+                    <button id="dl-csv" class="ghost" type="button" title="Download the current table as CSV">CSV</button>
+                    <button id="dl-json" class="ghost" type="button" title="Download the full report as JSON">JSON</button>
+                  </div>
+                </div>
+                <p class="hint">Click a legend entry to isolate it; click again to restore all.</p>
+
+                <div class="chart-wrap">
+                  <canvas id="chart"></canvas>
+                </div>
+
+                <section id="role-tables">
+                  <h2>Per interval</h2>
+                  <div id="table" class="table-wrap"></div>
+                </section>
+                <section id="packages" hidden>
+                  <h2>Per package <span id="pkg-date" class="muted"></span></h2>
+                  <div id="pkg-table" class="table-wrap"></div>
+                </section>
+                <section id="age-tables" hidden>
+                  <h2>Code age <span id="age-date" class="muted"></span></h2>
+                  <div id="age-table" class="table-wrap"></div>
+                </section>
+              </section>
             </div>
-            <label id="metric-wrap" class="metric" hidden>
-              <span>Metric</span>
-              <select id="metric">
-                <option value="app">App code</option>
-                <option value="test">Tests</option>
-                <option value="config">Config</option>
-                <option value="docs">Docs</option>
-                <option value="data">Data</option>
-                <option value="comments">Comments</option>
-                <option value="countedCode">Total (counted)</option>
-              </select>
-            </label>
-            <label id="cohort-role-wrap" class="metric" hidden>
-              <span>Role</span>
-              <select id="cohort-role">
-                <option value="app" selected>App code</option>
-                <option value="test">Tests</option>
-                <option value="config">Config</option>
-                <option value="docs">Docs</option>
-                <option value="data">Data</option>
-                <option value="all">All counted</option>
-              </select>
-            </label>
-            <label class="check" title="Stacked area (composition) vs overlaid lines (growth rates)">
-              <input id="stacked" type="checkbox" checked /> <span>Stacked</span>
-            </label>
-            <span class="spacer"></span>
-            <div class="exports">
-              <button id="dl-csv" class="ghost" type="button" title="Download the current table as CSV">CSV</button>
-              <button id="dl-json" class="ghost" type="button" title="Download the full report as JSON">JSON</button>
-            </div>
-          </div>
-          <p class="hint">Click a legend entry to isolate it; click again to restore all.</p>
-
-          <div class="chart-wrap">
-            <canvas id="chart"></canvas>
-          </div>
-
-          <section id="role-tables">
-            <h2>Per interval</h2>
-            <div id="table" class="table-wrap"></div>
           </section>
-          <section id="packages" hidden>
-            <h2>Per package <span id="pkg-date" class="muted"></span></h2>
-            <div id="pkg-table" class="table-wrap"></div>
-          </section>
-          <section id="age-tables" hidden>
-            <h2>Code age <span id="age-date" class="muted"></span></h2>
-            <div id="age-table" class="table-wrap"></div>
-          </section>
-        </section>
+        </div>
       </main>
 
       <footer class="colophon">

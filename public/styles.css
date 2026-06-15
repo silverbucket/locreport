@@ -1,46 +1,42 @@
 /* ==========================================================================
-   locreport — "precision instrument" theme
-   Dark-first, with an automatic light variant via light-dark().
-   Neutrals are tinted toward a cool slate-blue; one confident indigo accent;
-   hairline rules; tabular numerics. No external fonts (strict same-origin CSP).
+   locreport — "field instrument" theme
+   Dark-first with an automatic light variant via light-dark(). Slate-tinted
+   neutrals, one indigo accent, hairline rules, tabular numerics. The query and
+   the readout are bound into one vertical flow by a left "spine" so input and
+   output read as a single instrument. No external fonts (strict same-origin CSP).
    ========================================================================== */
 
 :root {
   color-scheme: dark light;
 
-  /* Surfaces — tinted slate, never pure black/white. */
   --bg: light-dark(oklch(0.985 0.004 255), oklch(0.165 0.012 260));
   --bg-2: light-dark(oklch(0.965 0.006 255), oklch(0.185 0.014 262));
   --panel: light-dark(oklch(0.998 0.003 255), oklch(0.212 0.016 262));
   --inset: light-dark(oklch(0.955 0.007 255), oklch(0.158 0.013 262));
 
-  /* Hairlines. */
   --line: light-dark(oklch(0.9 0.008 255), oklch(0.31 0.018 262));
   --line-strong: light-dark(oklch(0.8 0.012 255), oklch(0.42 0.024 262));
 
-  /* Ink. */
   --text: light-dark(oklch(0.27 0.02 262), oklch(0.93 0.012 260));
   --muted: light-dark(oklch(0.47 0.022 262), oklch(0.7 0.02 260));
   --faint: light-dark(oklch(0.6 0.018 262), oklch(0.56 0.018 260));
 
-  /* Accent — indigo, distinct from the categorical role hues. */
   --accent: light-dark(oklch(0.52 0.19 264), oklch(0.74 0.15 264));
   --accent-press: light-dark(oklch(0.45 0.19 264), oklch(0.68 0.16 264));
   --accent-soft: light-dark(oklch(0.52 0.19 264 / 0.1), oklch(0.74 0.15 264 / 0.16));
   --on-accent: light-dark(oklch(0.99 0.01 264), oklch(0.16 0.04 264));
-
   --danger: light-dark(oklch(0.55 0.2 25), oklch(0.72 0.17 25));
 
-  /* Chart axes (resolved to concrete colors via a JS probe). */
   --chart-grid: light-dark(oklch(0.91 0.008 255), oklch(0.28 0.016 262));
   --chart-tick: var(--muted);
   --chart-text: var(--text);
 
-  --radius: 12px;
+  --radius: 14px;
   --radius-sm: 9px;
   --shadow: light-dark(0 1px 2px oklch(0.5 0.03 262 / 0.08), 0 1px 0 oklch(0.1 0.02 262 / 0.5));
 
   --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Helvetica, Arial, sans-serif;
+  --font-mono: ui-monospace, "SF Mono", "Cascadia Code", "JetBrains Mono", Menlo, Consolas, monospace;
 
   --maxw: 1080px;
   --gutter: clamp(1.25rem, 4vw, 3rem);
@@ -49,7 +45,6 @@
 * {
   box-sizing: border-box;
 }
-
 html {
   -webkit-text-size-adjust: 100%;
 }
@@ -61,7 +56,6 @@ body {
   line-height: 1.55;
   color: var(--text);
   background-color: var(--bg);
-  /* Faint blueprint dot-grid — subtle texture for the instrument feel. */
   background-image: radial-gradient(var(--line) 0.6px, transparent 0.6px);
   background-size: 26px 26px;
   background-position: -13px -13px;
@@ -91,6 +85,11 @@ a {
   border: 0;
 }
 
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
 .page {
   max-width: var(--maxw);
   margin: 0 auto;
@@ -110,7 +109,6 @@ a {
   padding: clamp(1.1rem, 2.5vw, 1.6rem) 0;
   border-bottom: 1px solid var(--line);
 }
-
 .brand {
   display: inline-flex;
   align-items: center;
@@ -118,40 +116,35 @@ a {
   text-decoration: none;
   color: var(--text);
 }
-
 .mark {
   width: 26px;
   height: 26px;
   display: block;
 }
-
 .wordmark {
   font-weight: 680;
   font-size: 1.1rem;
   letter-spacing: -0.018em;
 }
-
 .version-badge {
-  font-size: 0.7rem;
-  font-weight: 600;
-  letter-spacing: 0.01em;
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  font-weight: 500;
   color: var(--muted);
   background: var(--inset);
   border: 1px solid var(--line);
   border-radius: 999px;
-  padding: 0.05rem 0.45rem;
+  padding: 0.08rem 0.45rem;
   font-variant-numeric: tabular-nums;
 }
 .version-badge:empty {
   display: none;
 }
-
 .masthead-nav {
   display: flex;
   align-items: center;
   gap: clamp(0.75rem, 2vw, 1.4rem);
 }
-
 .nav-link {
   display: inline-flex;
   align-items: center;
@@ -175,165 +168,174 @@ a {
   color: var(--faint);
 }
 
-/* ---- Hero --------------------------------------------------------------- */
-
 main {
   flex: 1;
-  padding: clamp(2.5rem, 7vw, 5rem) 0 3rem;
+  padding-bottom: 3rem;
 }
 
-.hero {
-  max-width: 46rem;
-}
+/* ---- Lede (what + why, fused) ------------------------------------------- */
 
-.kicker {
-  margin: 0 0 1rem;
-  font-size: 0.78rem;
-  font-weight: 650;
-  letter-spacing: 0.16em;
-  text-transform: uppercase;
-  color: var(--accent);
+.lede {
+  max-width: 52rem;
+  padding: clamp(2.75rem, 8vw, 5rem) 0 0;
 }
-
-.hero-title {
+.lede-title {
   margin: 0;
-  font-size: clamp(2.6rem, 1.6rem + 5vw, 4.75rem);
-  line-height: 0.98;
-  letter-spacing: -0.035em;
+  font-size: clamp(2.5rem, 1.3rem + 5.6vw, 4.6rem);
+  line-height: 1;
+  letter-spacing: -0.038em;
   font-weight: 720;
-}
-
-.hero-sub {
-  margin: 1.25rem 0 0;
-  max-width: 38rem;
-  font-size: clamp(1rem, 0.95rem + 0.4vw, 1.2rem);
-  line-height: 1.5;
-  color: var(--muted);
-}
-.hero-sub em {
-  font-style: normal;
-  color: var(--text);
-  font-weight: 560;
-}
-
-/* ---- Rationale ("why") -------------------------------------------------- */
-
-.rationale {
-  margin-top: clamp(3rem, 8vw, 5.5rem);
-  max-width: 44rem;
-}
-.rationale-lead {
-  margin: 0;
-  font-size: clamp(1.55rem, 1.1rem + 2vw, 2.4rem);
-  font-weight: 660;
-  line-height: 1.12;
-  letter-spacing: -0.025em;
   text-wrap: balance;
 }
-.rationale-body {
-  margin: 1.1rem 0 0;
-  max-width: 40rem;
-  color: var(--muted);
-  font-size: clamp(1rem, 0.96rem + 0.25vw, 1.12rem);
-  line-height: 1.6;
+.accentword {
+  color: var(--accent);
+  font-style: italic;
 }
-.rationale-body em {
+.lede-body {
+  margin: 1.5rem 0 0;
+  max-width: 44rem;
+  font-size: clamp(1.05rem, 0.98rem + 0.45vw, 1.27rem);
+  line-height: 1.55;
+  color: var(--muted);
+}
+.lede-body em {
   font-style: normal;
   color: var(--text);
   font-weight: 560;
 }
-.rationale-body strong {
-  color: var(--accent);
-  font-weight: 640;
+.lede-body strong {
+  color: var(--text);
+  font-weight: 660;
+  box-shadow: inset 0 -0.45em 0 var(--accent-soft);
 }
 
-/* ---- Search form -------------------------------------------------------- */
+/* ---- Flow: query + readout bound by a left spine ------------------------ */
 
-#form {
-  display: flex;
-  gap: 0.6rem;
-  flex-wrap: wrap;
+.flow {
+  --pl: clamp(1.4rem, 4vw, 2.75rem);
+  position: relative;
+  padding-left: var(--pl);
+  margin-top: clamp(2.5rem, 6vw, 4rem);
+}
+.flow::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0.5rem;
+  bottom: 0.5rem;
+  width: 1px;
+  background: var(--line);
+}
+.step {
+  position: relative;
+}
+.step::before {
+  content: "";
+  position: absolute;
+  top: 0.35rem;
+  left: calc(-1 * var(--pl) - 4.5px);
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--bg);
+  border: 2px solid var(--accent);
+}
+.step + .step {
   margin-top: clamp(1.75rem, 4vw, 2.5rem);
 }
+.step-tag {
+  margin: 0 0 0.75rem;
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  font-weight: 500;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
 
-.field {
+/* ---- Command bar -------------------------------------------------------- */
+
+.commandbar {
   display: flex;
-}
-.field-interval {
-  flex: 0 0 auto;
-}
-
-#repo {
-  flex: 1 1 22rem;
-  min-width: 16rem;
-}
-
-input[type="text"],
-select {
-  font: inherit;
-  color: var(--text);
+  align-items: stretch;
+  flex-wrap: wrap;
   background: var(--panel);
   border: 1px solid var(--line-strong);
-  border-radius: var(--radius-sm);
-  padding: 0.72rem 0.85rem;
+  border-radius: var(--radius);
+  overflow: hidden;
+  box-shadow: var(--shadow);
   transition: border-color 0.15s ease, box-shadow 0.15s ease;
 }
-input[type="text"] {
-  width: 100%;
+.commandbar:focus-within {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
 }
-input[type="text"]::placeholder {
+.cb-prompt {
+  display: flex;
+  align-items: center;
+  padding: 0 0.1rem 0 1.05rem;
+  color: var(--faint);
+  font-family: var(--font-mono);
+  font-size: 0.95rem;
+  user-select: none;
+}
+.cb-field {
+  flex: 1 1 14rem;
+  display: flex;
+}
+.commandbar input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: 1.02rem;
+  padding: 1rem 0.6rem;
+}
+.commandbar input::placeholder {
   color: var(--faint);
 }
-select {
+.commandbar input:focus-visible {
+  outline: none;
+}
+.cb-interval {
+  display: flex;
+  border-left: 1px solid var(--line);
+}
+.commandbar select {
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
   cursor: pointer;
-  padding-right: 2rem;
+  padding: 0 2.1rem 0 1rem;
   appearance: none;
   background-image: linear-gradient(45deg, transparent 50%, var(--muted) 50%),
     linear-gradient(135deg, var(--muted) 50%, transparent 50%);
-  background-position: calc(100% - 1.05rem) center, calc(100% - 0.72rem) center;
+  background-position: calc(100% - 1.15rem) center, calc(100% - 0.82rem) center;
   background-size: 5px 5px, 5px 5px;
   background-repeat: no-repeat;
 }
-
-input:focus-visible,
-select:focus-visible,
-button:focus-visible,
-.chip:focus-visible,
-a:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 2px;
-}
-input:focus-visible {
-  border-color: var(--accent);
-  box-shadow: 0 0 0 3px var(--accent-soft);
-  outline: none;
-}
-
-button {
-  font: inherit;
-  cursor: pointer;
-  border: 0;
-}
-
-#go {
+.commandbar #go {
   display: inline-flex;
   align-items: center;
   gap: 0.45rem;
+  border: 0;
+  border-radius: 0;
   background: var(--accent);
   color: var(--on-accent);
-  font-weight: 620;
-  border-radius: var(--radius-sm);
-  padding: 0.72rem 1.3rem;
-  transition: background 0.15s ease, transform 0.1s ease;
+  font: inherit;
+  font-weight: 640;
+  padding: 0 1.45rem;
+  cursor: pointer;
+  transition: background 0.15s ease;
 }
-#go:hover {
+.commandbar #go:hover {
   background: var(--accent-press);
 }
-#go:active {
-  transform: translateY(1px);
-}
-#go:disabled {
-  opacity: 0.55;
+.commandbar #go:disabled {
+  opacity: 0.6;
   cursor: progress;
 }
 .go-arrow {
@@ -341,31 +343,123 @@ button {
   height: 16px;
   transition: transform 0.2s cubic-bezier(0.22, 1, 0.36, 1);
 }
-#go:hover .go-arrow {
+.commandbar #go:hover .go-arrow {
   transform: translateX(3px);
 }
 
-/* ---- Example chips ------------------------------------------------------ */
+button {
+  cursor: pointer;
+}
 
-.examples {
+/* ---- Stage (the always-present readout) --------------------------------- */
+
+.stage {
+  min-height: 340px;
+}
+
+/* Empty state — teaches the roles via a "strata" motif and offers presets. */
+.stage-empty {
+  animation: rise 0.5s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+.strata {
+  margin: 0;
+}
+.strata-bar {
+  display: flex;
+  gap: 3px;
+  height: 58px;
+  border-radius: 10px;
+  overflow: hidden;
+}
+.strata-bar .seg {
+  flex: var(--w) 1 0;
+  background: var(--c);
+}
+.strata-bar .seg:first-child {
+  border-radius: 8px 3px 3px 8px;
+}
+.strata-bar .seg:last-child {
+  border-radius: 3px 8px 8px 3px;
+}
+.strata figcaption {
+  margin-top: 1rem;
+  max-width: 46rem;
+  color: var(--muted);
+  font-size: 0.97rem;
+  line-height: 1.55;
+}
+.strata .hl {
+  color: var(--c);
+  font-weight: 600;
+}
+
+.key {
+  list-style: none;
+  margin: 1.5rem 0 0;
+  padding: 1.35rem 0 0;
+  border-top: 1px solid var(--line);
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr));
+  gap: 0.7rem 1.75rem;
+}
+.key li {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  font-size: 0.92rem;
+}
+.key .dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 3px;
+  background: var(--c);
+  flex: 0 0 auto;
+  transform: translateY(1px);
+}
+.key b {
+  font-weight: 640;
+}
+.key li > span:last-child {
+  color: var(--faint);
+}
+.key-excl {
+  grid-column: 1 / -1;
+  color: var(--muted);
+  padding-top: 0.4rem;
+}
+.dot-excl {
+  background-image: repeating-linear-gradient(45deg, var(--faint), var(--faint) 1.5px, transparent 1.5px, transparent 4px);
+  border: 1px solid var(--line-strong);
+}
+.key-excl em {
+  font-style: normal;
+  color: var(--text);
+  font-weight: 560;
+}
+
+.presets {
+  margin-top: 1.6rem;
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 0.5rem;
-  margin-top: 1.1rem;
 }
-.examples-label {
-  font-size: 0.82rem;
+.presets-label {
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
   color: var(--faint);
-  margin-right: 0.15rem;
+  margin-right: 0.3rem;
 }
 .chip {
   background: transparent;
   color: var(--muted);
   border: 1px solid var(--line);
   border-radius: 999px;
-  padding: 0.32rem 0.8rem;
-  font-size: 0.85rem;
+  padding: 0.34rem 0.85rem;
+  font: inherit;
+  font-size: 0.86rem;
   font-weight: 540;
   transition: color 0.15s ease, border-color 0.15s ease, background 0.15s ease;
 }
@@ -375,69 +469,12 @@ button {
   background: var(--accent-soft);
 }
 
-/* ---- Roles legend strip ------------------------------------------------- */
-
-.legend-strip {
-  margin-top: clamp(2.5rem, 6vw, 4rem);
-  padding-top: 1.5rem;
-  border-top: 1px solid var(--line);
-}
-.roles {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(8.5rem, 1fr));
-  gap: 0.75rem 1.5rem;
-}
-.roles li {
-  display: flex;
-  align-items: baseline;
-  gap: 0.4rem;
-  flex-wrap: wrap;
-}
-.roles .dot {
-  width: 9px;
-  height: 9px;
-  border-radius: 3px;
-  background: var(--c);
-  flex: 0 0 auto;
-  transform: translateY(1px);
-}
-.roles b {
-  font-weight: 620;
-  letter-spacing: -0.01em;
-}
-.role-note {
-  color: var(--faint);
-  font-size: 0.85rem;
-  flex: 1 1 100%;
-  padding-left: 1.1rem;
-}
-.excluded-note {
-  margin: 1.25rem 0 0;
-  font-size: 0.9rem;
-  color: var(--muted);
-  max-width: 44rem;
-}
-.excluded-note code {
-  font-family: ui-monospace, "SF Mono", "Cascadia Code", Menlo, monospace;
-  font-size: 0.85em;
-  background: var(--inset);
-  border: 1px solid var(--line);
-  border-radius: 5px;
-  padding: 0.05em 0.35em;
-}
-.excluded-note strong {
-  color: var(--text);
-}
-
-/* ---- Status line -------------------------------------------------------- */
+/* ---- Status line (with live "working" indicator) ------------------------ */
 
 .status {
   position: relative;
   overflow: hidden;
-  margin: clamp(2rem, 5vw, 3rem) 0 0;
+  margin: 0 0 1.25rem;
   padding: 0.85rem 1.05rem;
   border: 1px solid var(--line);
   border-left: 3px solid var(--accent);
@@ -451,9 +488,6 @@ button {
   border-left-color: var(--danger);
   color: var(--danger);
 }
-
-/* While an analysis streams: a pulsing dot + a scanning line along the bottom,
-   so it's quietly obvious that work is happening in the background. */
 .status.working::before {
   content: "";
   display: inline-block;
@@ -497,17 +531,14 @@ button {
 /* ---- Results ------------------------------------------------------------ */
 
 #results {
-  margin-top: clamp(2rem, 5vw, 3rem);
   animation: rise 0.5s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
-
 .controls {
   display: flex;
   align-items: center;
   gap: 0.9rem;
   flex-wrap: wrap;
 }
-
 .segmented {
   display: inline-flex;
   border: 1px solid var(--line-strong);
@@ -518,7 +549,9 @@ button {
 .seg {
   background: transparent;
   color: var(--muted);
+  border: 0;
   padding: 0.5rem 0.95rem;
+  font: inherit;
   font-weight: 550;
   font-size: 0.9rem;
   transition: color 0.15s ease, background 0.15s ease;
@@ -533,7 +566,6 @@ button {
   background: var(--accent);
   color: var(--on-accent);
 }
-
 .metric {
   display: inline-flex;
   align-items: center;
@@ -542,9 +574,14 @@ button {
   font-size: 0.9rem;
 }
 .metric select {
-  padding: 0.45rem 1.9rem 0.45rem 0.65rem;
+  font: inherit;
+  color: var(--text);
+  background: var(--panel);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  padding: 0.45rem 0.7rem;
+  cursor: pointer;
 }
-
 .check {
   display: inline-flex;
   align-items: center;
@@ -559,11 +596,9 @@ button {
   width: 1rem;
   height: 1rem;
 }
-
 .spacer {
   flex: 1;
 }
-
 .exports {
   display: flex;
   gap: 0.5rem;
@@ -574,6 +609,7 @@ button {
   border: 1px solid var(--line-strong);
   border-radius: var(--radius-sm);
   padding: 0.45rem 0.85rem;
+  font: inherit;
   font-size: 0.85rem;
   font-weight: 560;
   transition: color 0.15s ease, border-color 0.15s ease;
@@ -582,13 +618,11 @@ button {
   color: var(--accent);
   border-color: var(--accent);
 }
-
 .hint {
   margin: 0.9rem 0 0;
   font-size: 0.82rem;
   color: var(--faint);
 }
-
 .chart-wrap {
   position: relative;
   margin: 1rem 0 1.5rem;
@@ -603,21 +637,22 @@ button {
 /* ---- Tables ------------------------------------------------------------- */
 
 h2 {
-  font-size: 0.82rem;
-  font-weight: 650;
-  letter-spacing: 0.08em;
+  font-family: var(--font-mono);
+  font-size: 0.74rem;
+  font-weight: 500;
+  letter-spacing: 0.14em;
   text-transform: uppercase;
   color: var(--muted);
   margin: 2rem 0 0.75rem;
 }
 .muted {
   color: var(--faint);
+  font-family: var(--font-sans);
   font-weight: 400;
   font-size: 0.78rem;
   letter-spacing: 0;
   text-transform: none;
 }
-
 .table-wrap {
   overflow-x: auto;
   border: 1px solid var(--line);
@@ -696,24 +731,18 @@ tbody tr:last-child td {
     transform: translateY(12px);
   }
 }
-
-.hero > * {
+.lede > *,
+.flow {
   animation: rise 0.55s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
-.kicker {
-  animation-delay: 0.02s;
+.lede-title {
+  animation-delay: 0.04s;
 }
-.hero-title {
-  animation-delay: 0.06s;
+.lede-body {
+  animation-delay: 0.1s;
 }
-.hero-sub {
-  animation-delay: 0.12s;
-}
-#form {
-  animation-delay: 0.18s;
-}
-.examples {
-  animation-delay: 0.24s;
+.flow {
+  animation-delay: 0.16s;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -728,12 +757,16 @@ tbody tr:last-child td {
 /* ---- Responsive --------------------------------------------------------- */
 
 @media (max-width: 560px) {
-  .field-interval,
-  #go {
+  .commandbar #go {
+    flex: 1 1 auto;
+    justify-content: center;
+    padding: 0.85rem 1.45rem;
+  }
+  .cb-interval {
     flex: 1 1 auto;
   }
-  #go {
-    justify-content: center;
+  .cb-interval select {
+    width: 100%;
   }
   .controls {
     gap: 0.7rem;
@@ -743,5 +776,8 @@ tbody tr:last-child td {
   }
   .nav-credit {
     display: none;
+  }
+  .stage {
+    min-height: 0;
   }
 }
