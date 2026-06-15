@@ -3,10 +3,8 @@
 Analyze a **GitHub** repository's lines of code **over time**, intelligently split
 by the *role* each file plays — actual application code vs. tests vs. config vs.
 docs vs. data — with comment lines tracked separately and build/vendored code
-excluded.
-
-This is the **Phase 0 engine + CLI**. No web UI or persistence yet (by design);
-those come next once the engine is proven.
+excluded. Use it from the **command line**, as a **self-hosted web app**, or as a
+**Docker image**.
 
 ## How it works
 
@@ -33,17 +31,17 @@ The result is a per-interval table of LOC by role.
 | `vendored`   | ❌ excluded | `node_modules/`, `vendor/`, `dist/`, `*.min.js`, lockfiles, generated |
 
 Rules live in `src/classifier.ts` as an **ordered, first-match-wins** list — easy
-to tweak or later expose as user-editable config.
+to tweak.
 
 ## Usage
 
 ```bash
-npm install
+pnpm install
 
 # yearly (default)
-npm run dev -- erikbern/git-of-theseus
-npx tsx src/cli.ts XAMPPRocky/tokei --interval 6m
-npx tsx src/cli.ts owner/repo --json > report.json
+pnpm analyze erikbern/git-of-theseus
+pnpm analyze XAMPPRocky/tokei --interval 6m
+pnpm analyze owner/repo --json > report.json
 ```
 
 Accepts `owner/repo`, `https://github.com/owner/repo[.git]`, or
@@ -56,7 +54,7 @@ Options: `--interval 1m|3m|6m|1y`, `--branch <name>`, `--by-package`, `--cohort`
 ### Code age (`--cohort`)
 
 ```bash
-npx tsx src/cli.ts sindresorhus/slugify --cohort
+pnpm analyze sindresorhus/slugify --cohort
 ```
 
 Groups each snapshot's surviving **code lines by the year they were authored**
@@ -71,7 +69,7 @@ analysis (a blame pass per commit), so it's opt-in and cached per commit.
 ### Monorepos (`--by-package`)
 
 ```bash
-npx tsx src/cli.ts vuejs/core --by-package
+pnpm analyze vuejs/core --by-package
 ```
 
 adds a per-package breakdown on top of the repo-wide table:
@@ -117,9 +115,18 @@ the query string and re-run automatically on load.
 It's a dependency-light Node HTTP server (`src/server/server.ts`) that reuses the
 same engine as the CLI. Chart.js is self-hosted (no CDN), and the page runs under
 a locked-down `default-src 'self'` CSP. Repo-controlled strings (package names)
-are HTML-escaped before rendering. No persistence yet — each analysis re-clones.
+are HTML-escaped before rendering.
 
 ## Deploy (self-host with Docker)
+
+Run the published multi-arch image from GHCR:
+
+```bash
+docker run -p 4317:4317 -v locreport-cache:/cache ghcr.io/silverbucket/locreport
+```
+
+`:latest` tracks the most recent release; pin a version tag (e.g. `:1.0.0`) for
+reproducible deploys, or use `:edge` to track `master`. To build locally instead:
 
 ```bash
 pnpm docker:up      # build + run on http://localhost:4317 (docker compose)
@@ -149,6 +156,22 @@ These complement the built-in **github.com-only** guard (an SSRF safeguard,
 since the server clones whatever URL it's given). Put a TLS-terminating reverse
 proxy in front for public exposure; `X-Forwarded-For` is honored for rate
 limiting.
+
+### Custom head includes
+
+To inject deployment-specific HTML into the page `<head>` (analytics tags, custom
+meta, verification tokens, …) without committing it to source control, drop a
+file at `public/includes.html`. It's gitignored, baked into the image at build
+time when present, and spliced into every page load. See
+[`public/includes.example.html`](public/includes.example.html) for the format.
+
+| Env var | Default | Purpose |
+| --- | --- | --- |
+| `LOCREPORT_INCLUDES_FILE` | `public/includes.html` | path to the head-includes file |
+| `LOCREPORT_CSP` | locked to `'self'` | override the document Content-Security-Policy |
+
+The default CSP is same-origin only, so an include that loads external or inline
+resources needs a matching `LOCREPORT_CSP` to be allowed.
 
 ## Caching & performance
 
@@ -185,19 +208,22 @@ brew install cloc   # optional, recommended for accuracy
 ## Development
 
 ```bash
-npm test           # run the suite (vitest)
-npm run test:watch
-npm run typecheck
+pnpm test          # run the suite (vitest)
+pnpm test:watch
+pnpm typecheck
 ```
 
 Tests are hermetic — the end-to-end test builds a local git repo with backdated
 commits, so the suite needs no network and no GitHub access.
 
-## Known limitations (Phase 0)
+## Notes & limitations
 
-- Builtin counter misclassifies comment tokens inside string literals; install
-  `cloc` to remove this.
+- The builtin counter can misclassify comment tokens inside string literals;
+  install `cloc` for string-literal-aware counting.
 - The `build` vs `config` boundary is heuristic and the most debatable; edit
-  `DEFAULT_RULES` to taste.
-- No caching/persistence yet — every run re-clones. (Phase 1.)
-- Follows `--first-parent` history on a single branch.
+  `DEFAULT_RULES` in `src/classifier.ts` to taste.
+- History follows `--first-parent` on a single branch.
+
+## License
+
+[MIT](LICENSE)
