@@ -41,17 +41,21 @@
 
       <main>
         <section class="lede">
-          <h1 class="lede-title">See what a codebase is <span class="accentword">actually</span> made of.</h1>
+          <h1 class="lede-title">Lines of code over time, by role.</h1>
           <p class="lede-body">
-            Most line counters treat every line the same — so a codebase looks like it only ever grows. locreport
-            splits <em>every commit</em> by the role each file plays, so adding tests, comments and docs while
-            <em>shrinking</em> the app code you maintain reads as exactly that: <strong>less to maintain, not more.</strong>
+            Point locreport at a public GitHub repository and it counts lines of code at each point in its history,
+            split by the role each file plays — app, tests, config, docs and data. Comments are counted separately;
+            build and vendored files are left out.
+          </p>
+          <p class="lede-note">
+            A single total can't show this: piling on tests and docs looks the same as growing the app you maintain.
+            Splitting by role keeps them apart.
           </p>
         </section>
 
         <div class="flow">
           <section class="step" aria-label="Choose a repository">
-            <p class="step-tag">Query</p>
+            <p class="step-tag">Repository</p>
             <form id="form" class="commandbar" autocomplete="off">
               <span class="cb-prompt" aria-hidden="true">github.com/</span>
               <label class="cb-field">
@@ -85,7 +89,7 @@
           </section>
 
           <section class="step" aria-label="Results">
-            <p class="step-tag">Readout</p>
+            <p class="step-tag">Report</p>
             <div class="stage">
               <div id="stage-empty" class="stage-empty">
                 <figure class="strata">
@@ -97,9 +101,8 @@
                     <span class="seg" style="--c: #f472b6; --w: 6"></span>
                   </div>
                   <figcaption>
-                    Every line in a repo, sorted by what it's for. The <span class="hl" style="--c: #4f8cff">blue</span>
-                    band is the code you maintain — locreport tracks each band on its own, across the project's whole
-                    history.
+                    Each line is sorted into exactly one role; build and vendored code is excluded. Each role is
+                    counted on its own, across the repository's history.
                   </figcaption>
                 </figure>
 
@@ -113,7 +116,7 @@
                 </ul>
 
                 <div class="presets">
-                  <span class="presets-label">Try one</span>
+                  <span class="presets-label">Examples</span>
                   <button type="button" class="chip js-example" data-repo="erikbern/git-of-theseus">git-of-theseus</button>
                   <button type="button" class="chip js-example" data-repo="XAMPPRocky/tokei">tokei</button>
                   <button type="button" class="chip js-example" data-repo="sindresorhus/slugify">slugify</button>

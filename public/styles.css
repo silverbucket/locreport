@@ -176,37 +176,30 @@ main {
 /* ---- Lede (what + why, fused) ------------------------------------------- */
 
 .lede {
-  max-width: 52rem;
-  padding: clamp(2.75rem, 8vw, 5rem) 0 0;
+  max-width: 46rem;
+  padding: clamp(2rem, 5vw, 3.25rem) 0 0;
 }
 .lede-title {
   margin: 0;
-  font-size: clamp(2.5rem, 1.3rem + 5.6vw, 4.6rem);
-  line-height: 1;
-  letter-spacing: -0.038em;
-  font-weight: 720;
+  font-size: clamp(1.6rem, 1.25rem + 1.6vw, 2.25rem);
+  line-height: 1.1;
+  letter-spacing: -0.022em;
+  font-weight: 680;
   text-wrap: balance;
 }
-.accentword {
-  color: var(--accent);
-  font-style: italic;
-}
 .lede-body {
-  margin: 1.5rem 0 0;
-  max-width: 44rem;
-  font-size: clamp(1.05rem, 0.98rem + 0.45vw, 1.27rem);
-  line-height: 1.55;
+  margin: 1.1rem 0 0;
+  max-width: 42rem;
+  font-size: clamp(1rem, 0.97rem + 0.2vw, 1.1rem);
+  line-height: 1.6;
   color: var(--muted);
 }
-.lede-body em {
-  font-style: normal;
-  color: var(--text);
-  font-weight: 560;
-}
-.lede-body strong {
-  color: var(--text);
-  font-weight: 660;
-  box-shadow: inset 0 -0.45em 0 var(--accent-soft);
+.lede-note {
+  margin: 0.85rem 0 0;
+  max-width: 42rem;
+  font-size: 0.95rem;
+  line-height: 1.6;
+  color: var(--faint);
 }
 
 /* ---- Flow: query + readout bound by a left spine ------------------------ */
@@ -385,12 +378,8 @@ button {
   margin-top: 1rem;
   max-width: 46rem;
   color: var(--muted);
-  font-size: 0.97rem;
+  font-size: 0.95rem;
   line-height: 1.55;
-}
-.strata .hl {
-  color: var(--c);
-  font-weight: 600;
 }
 
 .key {
