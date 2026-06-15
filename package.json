@@ -1,6 +1,6 @@
 {
   "name": "locreport",
-  "version": "1.1.1",
+  "version": "1.1.2",
   "description": "Analyze a GitHub repo's lines of code over time, split by role (app, tests, config, comments, build).",
   "type": "module",
   "bin": {
