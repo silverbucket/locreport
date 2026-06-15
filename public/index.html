@@ -87,7 +87,16 @@
           </div>
         </section>
 
-        <p id="status" class="status" hidden></p>
+        <section class="rationale" aria-label="Why locreport exists">
+          <p class="kicker">Why locreport</p>
+          <p class="rationale-lead">Most line counters treat every line the same.</p>
+          <p class="rationale-body">
+            So a codebase looks like it does nothing but grow. Yet adding tests, comments and docs while
+            <em>shrinking</em> the application code means <strong>less to maintain, not more</strong> — and one big
+            number can't tell those apart. locreport separates the code you actually maintain from the tests, config,
+            docs and data around it, so you can see which one is really moving.
+          </p>
+        </section>
 
         <section class="legend-strip" aria-label="What the roles mean">
           <ol class="roles">
@@ -102,6 +111,8 @@
             detected and <strong>excluded</strong> from the counts.
           </p>
         </section>
+
+        <p id="status" class="status" hidden></p>
 
         <section id="results" hidden>
           <div class="controls">

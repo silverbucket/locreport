@@ -216,6 +216,37 @@ main {
   font-weight: 560;
 }
 
+/* ---- Rationale ("why") -------------------------------------------------- */
+
+.rationale {
+  margin-top: clamp(3rem, 8vw, 5.5rem);
+  max-width: 44rem;
+}
+.rationale-lead {
+  margin: 0;
+  font-size: clamp(1.55rem, 1.1rem + 2vw, 2.4rem);
+  font-weight: 660;
+  line-height: 1.12;
+  letter-spacing: -0.025em;
+  text-wrap: balance;
+}
+.rationale-body {
+  margin: 1.1rem 0 0;
+  max-width: 40rem;
+  color: var(--muted);
+  font-size: clamp(1rem, 0.96rem + 0.25vw, 1.12rem);
+  line-height: 1.6;
+}
+.rationale-body em {
+  font-style: normal;
+  color: var(--text);
+  font-weight: 560;
+}
+.rationale-body strong {
+  color: var(--accent);
+  font-weight: 640;
+}
+
 /* ---- Search form -------------------------------------------------------- */
 
 #form {
@@ -404,6 +435,8 @@ button {
 /* ---- Status line -------------------------------------------------------- */
 
 .status {
+  position: relative;
+  overflow: hidden;
   margin: clamp(2rem, 5vw, 3rem) 0 0;
   padding: 0.85rem 1.05rem;
   border: 1px solid var(--line);
@@ -417,6 +450,48 @@ button {
 .status.error {
   border-left-color: var(--danger);
   color: var(--danger);
+}
+
+/* While an analysis streams: a pulsing dot + a scanning line along the bottom,
+   so it's quietly obvious that work is happening in the background. */
+.status.working::before {
+  content: "";
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  margin-right: 0.6rem;
+  border-radius: 50%;
+  background: var(--accent);
+  animation: pulse 1.25s ease-in-out infinite;
+}
+.status.working::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 35%;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, var(--accent), transparent);
+  animation: scan 1.25s ease-in-out infinite;
+}
+@keyframes pulse {
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.3;
+    transform: scale(0.78);
+  }
+}
+@keyframes scan {
+  0% {
+    transform: translateX(-110%);
+  }
+  100% {
+    transform: translateX(386%);
+  }
 }
 
 /* ---- Results ------------------------------------------------------------ */

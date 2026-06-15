@@ -444,6 +444,11 @@ function setStatus(msg, isError) {
   el.classList.toggle("error", !!isError);
 }
 
+/** Toggle the "work happening in the background" indicator on the status line. */
+function setWorking(on) {
+  $("status").classList.toggle("working", on);
+}
+
 function runAnalysis() {
   const repoInput = $("repo").value.trim();
   if (!repoInput) return;
@@ -455,6 +460,7 @@ function runAnalysis() {
   $("go").disabled = true;
   $("results").hidden = true;
   setStatus("Connecting…");
+  setWorking(true);
 
   const es = new EventSource(`/api/analyze?${params}`);
 
@@ -474,6 +480,7 @@ function runAnalysis() {
     report = JSON.parse(e.data);
     es.close();
     $("go").disabled = false;
+    setWorking(false);
     setStatus(`Done — ${report.snapshots.length} snapshots of ${report.repoUrl}`);
     render();
     $("results").hidden = false;
@@ -482,12 +489,14 @@ function runAnalysis() {
   es.addEventListener("fail", (e) => {
     es.close();
     $("go").disabled = false;
+    setWorking(false);
     setStatus(`Error: ${JSON.parse(e.data).message}`, true);
   });
 
   es.onerror = () => {
     if (es.readyState === EventSource.CLOSED && $("go").disabled) {
       $("go").disabled = false;
+      setWorking(false);
       setStatus("Connection closed before completion.", true);
     }
   };
