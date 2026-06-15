@@ -1,5 +1,8 @@
 import type { AddressInfo } from "node:net";
 import type { Server } from "node:http";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import path from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { createServer } from "../src/server/server.js";
 
@@ -37,6 +40,47 @@ describe("static serving", () => {
 
   it("404s unknown paths", async () => {
     expect((await fetch(`${base}/nope`)).status).toBe(404);
+  });
+
+  it("strips the includes marker when no includes file is present", async () => {
+    const html = await (await fetch(`${base}/`)).text();
+    expect(html).not.toContain("locreport:includes");
+  });
+});
+
+describe("head includes", () => {
+  let dir: string;
+  let incServer: Server;
+  let incBase: string;
+
+  beforeAll(async () => {
+    dir = await mkdtemp(path.join(tmpdir(), "locreport-inc-"));
+    const file = path.join(dir, "includes.html");
+    await writeFile(file, '<meta name="x-test-include" content="present" />');
+    process.env.LOCREPORT_INCLUDES_FILE = file;
+    process.env.LOCREPORT_CSP = "default-src 'self' https://example.com";
+    incServer = createServer();
+    await new Promise<void>((resolve) => incServer.listen(0, "127.0.0.1", resolve));
+    incBase = `http://127.0.0.1:${(incServer.address() as AddressInfo).port}`;
+  });
+
+  afterAll(async () => {
+    delete process.env.LOCREPORT_INCLUDES_FILE;
+    delete process.env.LOCREPORT_CSP;
+    await new Promise<void>((resolve) => incServer.close(() => resolve()));
+    await rm(dir, { recursive: true, force: true });
+  });
+
+  it("splices the includes file into <head> and removes the marker", async () => {
+    const res = await fetch(`${incBase}/`);
+    const html = await res.text();
+    expect(html).toContain('name="x-test-include"');
+    expect(html).not.toContain("locreport:includes");
+  });
+
+  it("honors a LOCREPORT_CSP override for the document", async () => {
+    const csp = (await fetch(`${incBase}/`)).headers.get("content-security-policy") ?? "";
+    expect(csp).toContain("https://example.com");
   });
 });
 

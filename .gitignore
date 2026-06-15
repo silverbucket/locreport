@@ -4,3 +4,6 @@ dist/
 .DS_Store
 /tmp/
 /.locreport-cache/
+
+# Deployment-specific head includes (analytics, etc.) — see public/includes.example.html
+/public/includes.html

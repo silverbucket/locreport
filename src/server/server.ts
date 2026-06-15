@@ -10,11 +10,29 @@ import { BusyError, clientIp, loadLimits, RateLimiter, Semaphore } from "./limit
 const ROOT = path.resolve(fileURLToPath(new URL("../..", import.meta.url)));
 const PUBLIC_DIR = path.join(ROOT, "public");
 const CHARTJS = path.join(ROOT, "node_modules", "chart.js", "dist", "chart.umd.min.js");
+const INDEX_HTML = path.join(PUBLIC_DIR, "index.html");
+
+const INCLUDES_MARKER = "<!-- locreport:includes -->";
+
+// Optional operator-provided HTML spliced into the page <head> (analytics tags,
+// custom meta, etc.). Gitignored by default and baked into the image at build
+// time if present; absent in the published source. See public/includes.example.html.
+function includesFile(): string {
+  return process.env.LOCREPORT_INCLUDES_FILE
+    ? path.resolve(process.env.LOCREPORT_INCLUDES_FILE)
+    : path.join(PUBLIC_DIR, "includes.html");
+}
+
+// Everything is same-origin, so the default CSP is locked to 'self'. An include
+// that pulls in external or inline resources will be blocked by this — operators
+// who add such includes can override the document CSP wholesale via LOCREPORT_CSP.
+const DEFAULT_CSP = "default-src 'self'; style-src 'self' 'unsafe-inline'; object-src 'none'; base-uri 'none'";
+function htmlCsp(): string {
+  return process.env.LOCREPORT_CSP?.trim() || DEFAULT_CSP;
+}
 
 // Self-hosted assets only — no external origins (no SRI/CDN-compromise surface).
 const STATIC: Record<string, { file: string; type: string }> = {
-  "/": { file: PUBLIC_DIR + "/index.html", type: "text/html; charset=utf-8" },
-  "/index.html": { file: PUBLIC_DIR + "/index.html", type: "text/html; charset=utf-8" },
   "/app.js": { file: PUBLIC_DIR + "/app.js", type: "text/javascript; charset=utf-8" },
   "/styles.css": { file: PUBLIC_DIR + "/styles.css", type: "text/css; charset=utf-8" },
   "/vendor/chart.js": { file: CHARTJS, type: "text/javascript; charset=utf-8" },
@@ -29,9 +47,30 @@ async function serveStatic(res: ServerResponse, entry: { file: string; type: str
     const body = await readFile(entry.file);
     res.writeHead(200, {
       "content-type": entry.type,
-      // Everything is same-origin; lock the CSP down to 'self'.
-      "content-security-policy":
-        "default-src 'self'; style-src 'self' 'unsafe-inline'; object-src 'none'; base-uri 'none'",
+      "content-security-policy": htmlCsp(),
+      "x-content-type-options": "nosniff",
+    });
+    res.end(body);
+  } catch {
+    res.writeHead(404, { "content-type": "text/plain" }).end("Not found");
+  }
+}
+
+// Serve index.html with the optional includes file spliced into the marker.
+// A function replacement avoids `$`-pattern interpretation in the included text.
+async function serveIndex(res: ServerResponse): Promise<void> {
+  try {
+    const html = await readFile(INDEX_HTML, "utf8");
+    let includes = "";
+    try {
+      includes = await readFile(includesFile(), "utf8");
+    } catch {
+      // No includes file — render the page as-is.
+    }
+    const body = html.replace(INCLUDES_MARKER, () => includes);
+    res.writeHead(200, {
+      "content-type": "text/html; charset=utf-8",
+      "content-security-policy": htmlCsp(),
       "x-content-type-options": "nosniff",
     });
     res.end(body);
@@ -146,6 +185,11 @@ export function createServer(): Server {
 
     if (req.method === "GET" && url.pathname === "/api/analyze") {
       void handleAnalyze(req, res, url, gate);
+      return;
+    }
+
+    if (req.method === "GET" && (url.pathname === "/" || url.pathname === "/index.html")) {
+      void serveIndex(res);
       return;
     }
 

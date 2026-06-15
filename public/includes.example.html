@@ -1,0 +1,23 @@
+<!--
+  Optional head includes.
+
+  Copy this file to `public/includes.html` (which is gitignored) and put whatever
+  HTML you want injected into the page <head> here — analytics snippets, custom
+  meta tags, verification tokens, etc. It is kept out of source control so
+  deployment-specific tags never get published, and is baked into the Docker
+  image at build time if present.
+
+  Whatever you place here is rendered verbatim into <head>. Some pointers:
+
+  - For externally hosted scripts, add Subresource Integrity
+    (integrity="sha384-..." crossorigin="anonymous") so a compromised host
+    cannot inject code.
+
+  - If your include loads external or inline resources, the default same-origin
+    Content-Security-Policy will block it. Override the document CSP with the
+    LOCREPORT_CSP environment variable, e.g.:
+
+      LOCREPORT_CSP="default-src 'self'; script-src 'self' https://example.com; img-src 'self' https://example.com; connect-src 'self' https://example.com"
+
+  Replace this comment with your own tags in public/includes.html.
+-->
