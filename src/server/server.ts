@@ -49,6 +49,7 @@ function htmlCsp(): string {
 const STATIC: Record<string, { file: string; type: string }> = {
   "/app.js": { file: PUBLIC_DIR + "/app.js", type: "text/javascript; charset=utf-8" },
   "/styles.css": { file: PUBLIC_DIR + "/styles.css", type: "text/css; charset=utf-8" },
+  "/favicon.svg": { file: PUBLIC_DIR + "/favicon.svg", type: "image/svg+xml" },
   "/vendor/chart.js": { file: CHARTJS, type: "text/javascript; charset=utf-8" },
 };
 
