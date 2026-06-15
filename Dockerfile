@@ -5,7 +5,10 @@ FROM node:22-slim AS build
 WORKDIR /app
 RUN corepack enable
 COPY package.json pnpm-lock.yaml ./
-RUN pnpm install --frozen-lockfile
+# --ignore-scripts: the image only runs `tsc` here and `node` at runtime, so no
+# dependency's native build step (e.g. esbuild) is needed. It also avoids pnpm's
+# non-interactive ERR_PNPM_IGNORED_BUILDS failure on unapproved build scripts.
+RUN pnpm install --frozen-lockfile --ignore-scripts
 COPY tsconfig.json ./
 COPY src ./src
 RUN pnpm build
@@ -25,7 +28,7 @@ RUN corepack enable
 
 # Production dependencies only (includes chart.js, which the server self-hosts).
 COPY package.json pnpm-lock.yaml ./
-RUN pnpm install --frozen-lockfile --prod
+RUN pnpm install --frozen-lockfile --prod --ignore-scripts
 
 COPY public ./public
 COPY --from=build /app/dist ./dist
