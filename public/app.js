@@ -1,6 +1,17 @@
 "use strict";
 
 const $ = (id) => document.getElementById(id);
+
+/** Resolve a CSS custom property to a concrete color the canvas accepts
+ * (handles light-dark() / oklch by reading a probe element's computed color). */
+function themeColor(varName) {
+  const probe = document.createElement("span");
+  probe.style.cssText = `color:var(${varName});position:absolute;visibility:hidden`;
+  document.body.appendChild(probe);
+  const color = getComputedStyle(probe).color;
+  probe.remove();
+  return color;
+}
 const EXCLUDED = new Set(["build", "vendored"]);
 const ROLE_SERIES = [
   ["app", "App", "#4f8cff"],
@@ -205,6 +216,9 @@ function legendIsolate(_e, item, legend) {
 }
 
 function drawChart(labels, datasets, yTitle) {
+  const grid = themeColor("--chart-grid");
+  const tick = themeColor("--chart-tick");
+  const text = themeColor("--chart-text");
   const cfg = {
     type: "line",
     data: { labels, datasets },
@@ -213,16 +227,16 @@ function drawChart(labels, datasets, yTitle) {
       maintainAspectRatio: false,
       interaction: { mode: "index", intersect: false },
       scales: {
-        x: { stacked, grid: { color: "#262b36" }, ticks: { color: "#98a2b3" } },
+        x: { stacked, grid: { color: grid }, ticks: { color: tick } },
         y: {
           stacked,
-          grid: { color: "#262b36" },
-          ticks: { color: "#98a2b3", callback: (v) => n(v) },
-          title: { display: true, text: yTitle, color: "#98a2b3" },
+          grid: { color: grid },
+          ticks: { color: tick, callback: (v) => n(v) },
+          title: { display: true, text: yTitle, color: tick },
         },
       },
       plugins: {
-        legend: { labels: { color: "#e6e9ef", boxWidth: 12 }, onClick: legendIsolate },
+        legend: { labels: { color: text, boxWidth: 12 }, onClick: legendIsolate },
         tooltip: { callbacks: { label: (c) => `${c.dataset.label}: ${n(c.parsed.y)}` } },
       },
     },
@@ -482,6 +496,19 @@ function runAnalysis() {
 $("form").addEventListener("submit", (ev) => {
   ev.preventDefault();
   runAnalysis();
+});
+
+// Landing-page example repos: fill the field and run.
+for (const el of document.querySelectorAll(".js-example")) {
+  el.addEventListener("click", () => {
+    $("repo").value = el.dataset.repo;
+    runAnalysis();
+  });
+}
+
+// Re-tint the chart's axes/legend when the OS color scheme flips.
+window.matchMedia?.("(prefers-color-scheme: dark)").addEventListener("change", () => {
+  if (report) renderChart();
 });
 
 // Restore state from a shared URL and auto-run.

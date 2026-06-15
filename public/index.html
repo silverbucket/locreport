@@ -3,96 +3,174 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>locreport — LOC over time, by role</title>
+    <meta name="color-scheme" content="dark light" />
+    <title>locreport — lines of code over time, by role</title>
+    <meta
+      name="description"
+      content="Point locreport at any GitHub repository and watch its codebase grow over time — split by the role each file plays."
+    />
     <link rel="stylesheet" href="/styles.css" />
     <!-- locreport:includes -->
   </head>
   <body>
-    <header>
-      <h1>locreport</h1>
-      <p class="tagline">Lines of code over time for a GitHub repo, split by role.</p>
-    </header>
+    <div class="page">
+      <header class="masthead">
+        <a class="brand" href="/" aria-label="locreport home">
+          <svg class="mark" viewBox="0 0 28 28" aria-hidden="true" focusable="false">
+            <rect x="2" y="15" width="4.2" height="11" rx="1.2" fill="#4f8cff" />
+            <rect x="9" y="9" width="4.2" height="17" rx="1.2" fill="#2dd4bf" />
+            <rect x="16" y="12.5" width="4.2" height="13.5" rx="1.2" fill="#f59e0b" />
+            <rect x="23" y="5" width="4.2" height="21" rx="1.2" fill="#a78bfa" />
+          </svg>
+          <span class="wordmark">locreport</span>
+          <span class="version-badge"><!-- locreport:version --></span>
+        </a>
+        <nav class="masthead-nav">
+          <a class="nav-link" href="https://github.com/silverbucket/locreport" target="_blank" rel="noopener noreferrer">
+            GitHub
+            <svg class="ext" viewBox="0 0 12 12" aria-hidden="true" focusable="false">
+              <path d="M3 3h6v6" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" />
+              <path d="M9 3 3.5 8.5" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" />
+            </svg>
+          </a>
+          <a class="nav-link nav-credit" href="https://silverbucket.net" target="_blank" rel="noopener noreferrer">
+            silverbucket
+          </a>
+        </nav>
+      </header>
 
-    <main>
-      <form id="form" autocomplete="off">
-        <input
-          id="repo"
-          name="repo"
-          type="text"
-          placeholder="owner/repo  or  https://github.com/owner/repo"
-          required
-          spellcheck="false"
-        />
-        <select id="interval" name="interval" title="Sampling interval">
-          <option value="1m">Monthly</option>
-          <option value="3m">Quarterly</option>
-          <option value="6m">Every 6 months</option>
-          <option value="1y" selected>Yearly</option>
-        </select>
-        <button id="go" type="submit">Analyze</button>
-      </form>
+      <main>
+        <section class="hero">
+          <p class="kicker">Codebase archaeology</p>
+          <h1 class="hero-title">Lines of code,<br />over&nbsp;time.</h1>
+          <p class="hero-sub">
+            Point locreport at any public GitHub repository and watch its codebase grow — split by the
+            <em>role</em> each file plays, with comments tracked separately and build &amp; vendored noise filtered out.
+          </p>
 
-      <p id="status" class="status" hidden></p>
+          <form id="form" autocomplete="off">
+            <label class="field">
+              <span class="sr-only">GitHub repository</span>
+              <input
+                id="repo"
+                name="repo"
+                type="text"
+                placeholder="owner/repo  ·  or a full github.com URL"
+                required
+                spellcheck="false"
+                autocapitalize="off"
+              />
+            </label>
+            <label class="field field-interval">
+              <span class="sr-only">Sampling interval</span>
+              <select id="interval" name="interval" title="Sampling interval">
+                <option value="1m">Monthly</option>
+                <option value="3m">Quarterly</option>
+                <option value="6m">Every 6 months</option>
+                <option value="1y" selected>Yearly</option>
+              </select>
+            </label>
+            <button id="go" type="submit">
+              Analyze
+              <svg class="go-arrow" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+                <path d="M2 8h11M9 4l4 4-4 4" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" />
+              </svg>
+            </button>
+          </form>
 
-      <section id="results" hidden>
-        <div class="controls">
-          <div class="segmented" role="tablist">
-            <button id="view-role" class="seg active" type="button">By role</button>
-            <button id="view-pkg" class="seg" type="button">By package</button>
-            <button id="view-age" class="seg" type="button" title="Surviving lines by year authored (runs git blame)">Code age</button>
+          <div class="examples">
+            <span class="examples-label">Try</span>
+            <button type="button" class="chip js-example" data-repo="erikbern/git-of-theseus">git-of-theseus</button>
+            <button type="button" class="chip js-example" data-repo="XAMPPRocky/tokei">tokei</button>
+            <button type="button" class="chip js-example" data-repo="sindresorhus/slugify">slugify</button>
+            <button type="button" class="chip js-example" data-repo="vuejs/core">vuejs/core</button>
           </div>
-          <label id="metric-wrap" class="metric" hidden>
-            Metric
-            <select id="metric">
-              <option value="app">App code</option>
-              <option value="test">Tests</option>
-              <option value="config">Config</option>
-              <option value="docs">Docs</option>
-              <option value="data">Data</option>
-              <option value="comments">Comments</option>
-              <option value="countedCode">Total (counted)</option>
-            </select>
-          </label>
-          <label id="cohort-role-wrap" class="metric" hidden>
-            Role
-            <select id="cohort-role">
-              <option value="app" selected>App code</option>
-              <option value="test">Tests</option>
-              <option value="config">Config</option>
-              <option value="docs">Docs</option>
-              <option value="data">Data</option>
-              <option value="all">All counted</option>
-            </select>
-          </label>
-          <label class="check" title="Stacked area (composition) vs overlaid lines (growth rates)">
-            <input id="stacked" type="checkbox" checked /> Stacked
-          </label>
-          <span class="spacer"></span>
-          <div class="exports">
-            <button id="dl-csv" class="ghost" type="button" title="Download the current table as CSV">CSV</button>
-            <button id="dl-json" class="ghost" type="button" title="Download the full report as JSON">JSON</button>
+        </section>
+
+        <p id="status" class="status" hidden></p>
+
+        <section class="legend-strip" aria-label="What the roles mean">
+          <ol class="roles">
+            <li><span class="dot" style="--c: #4f8cff"></span><b>App</b><span class="role-note">the actual application code</span></li>
+            <li><span class="dot" style="--c: #2dd4bf"></span><b>Tests</b><span class="role-note">specs, fixtures, e2e</span></li>
+            <li><span class="dot" style="--c: #f59e0b"></span><b>Config</b><span class="role-note">yaml, toml, manifests</span></li>
+            <li><span class="dot" style="--c: #a78bfa"></span><b>Docs</b><span class="role-note">markdown, rst</span></li>
+            <li><span class="dot" style="--c: #f472b6"></span><b>Data</b><span class="role-note">json, csv, xml</span></li>
+          </ol>
+          <p class="excluded-note">
+            Build files and vendored / generated code (<code>node_modules</code>, lockfiles, minified bundles) are
+            detected and <strong>excluded</strong> from the counts.
+          </p>
+        </section>
+
+        <section id="results" hidden>
+          <div class="controls">
+            <div class="segmented" role="tablist" aria-label="Chart view">
+              <button id="view-role" class="seg active" type="button">By role</button>
+              <button id="view-pkg" class="seg" type="button">By package</button>
+              <button id="view-age" class="seg" type="button" title="Surviving lines by year authored (runs git blame)">Code age</button>
+            </div>
+            <label id="metric-wrap" class="metric" hidden>
+              <span>Metric</span>
+              <select id="metric">
+                <option value="app">App code</option>
+                <option value="test">Tests</option>
+                <option value="config">Config</option>
+                <option value="docs">Docs</option>
+                <option value="data">Data</option>
+                <option value="comments">Comments</option>
+                <option value="countedCode">Total (counted)</option>
+              </select>
+            </label>
+            <label id="cohort-role-wrap" class="metric" hidden>
+              <span>Role</span>
+              <select id="cohort-role">
+                <option value="app" selected>App code</option>
+                <option value="test">Tests</option>
+                <option value="config">Config</option>
+                <option value="docs">Docs</option>
+                <option value="data">Data</option>
+                <option value="all">All counted</option>
+              </select>
+            </label>
+            <label class="check" title="Stacked area (composition) vs overlaid lines (growth rates)">
+              <input id="stacked" type="checkbox" checked /> <span>Stacked</span>
+            </label>
+            <span class="spacer"></span>
+            <div class="exports">
+              <button id="dl-csv" class="ghost" type="button" title="Download the current table as CSV">CSV</button>
+              <button id="dl-json" class="ghost" type="button" title="Download the full report as JSON">JSON</button>
+            </div>
           </div>
-        </div>
-        <p class="hint muted">Tip: click a legend entry to isolate it; click it again to restore all.</p>
+          <p class="hint">Click a legend entry to isolate it; click again to restore all.</p>
 
-        <div class="chart-wrap">
-          <canvas id="chart"></canvas>
-        </div>
+          <div class="chart-wrap">
+            <canvas id="chart"></canvas>
+          </div>
 
-        <section id="role-tables">
-          <h2>Per interval</h2>
-          <div id="table" class="table-wrap"></div>
+          <section id="role-tables">
+            <h2>Per interval</h2>
+            <div id="table" class="table-wrap"></div>
+          </section>
+          <section id="packages" hidden>
+            <h2>Per package <span id="pkg-date" class="muted"></span></h2>
+            <div id="pkg-table" class="table-wrap"></div>
+          </section>
+          <section id="age-tables" hidden>
+            <h2>Code age <span id="age-date" class="muted"></span></h2>
+            <div id="age-table" class="table-wrap"></div>
+          </section>
         </section>
-        <section id="packages" hidden>
-          <h2>Per package <span id="pkg-date" class="muted"></span></h2>
-          <div id="pkg-table" class="table-wrap"></div>
-        </section>
-        <section id="age-tables" hidden>
-          <h2>Code age <span id="age-date" class="muted"></span></h2>
-          <div id="age-table" class="table-wrap"></div>
-        </section>
-      </section>
-    </main>
+      </main>
+
+      <footer class="colophon">
+        <p>
+          <a href="https://github.com/silverbucket/locreport" target="_blank" rel="noopener noreferrer">Open source</a>
+          on GitHub · MIT licensed · a
+          <a href="https://silverbucket.net" target="_blank" rel="noopener noreferrer">silverbucket</a> project.
+        </p>
+      </footer>
+    </div>
 
     <script src="/vendor/chart.js"></script>
     <script src="/app.js"></script>

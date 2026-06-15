@@ -13,6 +13,20 @@ const CHARTJS = path.join(ROOT, "node_modules", "chart.js", "dist", "chart.umd.m
 const INDEX_HTML = path.join(PUBLIC_DIR, "index.html");
 
 const INCLUDES_MARKER = "<!-- locreport:includes -->";
+const VERSION_MARKER = "<!-- locreport:version -->";
+
+// App version, read once from package.json (alongside ROOT) and shown in the UI.
+let versionCache: string | undefined;
+async function appVersion(): Promise<string> {
+  if (versionCache !== undefined) return versionCache;
+  try {
+    const pkg = JSON.parse(await readFile(path.join(ROOT, "package.json"), "utf8")) as { version?: string };
+    versionCache = pkg.version && pkg.version !== "0.0.0" ? `v${pkg.version}` : "";
+  } catch {
+    versionCache = "";
+  }
+  return versionCache;
+}
 
 // Optional operator-provided HTML spliced into the page <head> (analytics tags,
 // custom meta, etc.). Gitignored by default and baked into the image at build
@@ -67,7 +81,8 @@ async function serveIndex(res: ServerResponse): Promise<void> {
     } catch {
       // No includes file — render the page as-is.
     }
-    const body = html.replace(INCLUDES_MARKER, () => includes);
+    const version = await appVersion();
+    const body = html.replace(INCLUDES_MARKER, () => includes).replace(VERSION_MARKER, () => version);
     res.writeHead(200, {
       "content-type": "text/html; charset=utf-8",
       "content-security-policy": htmlCsp(),
