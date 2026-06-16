@@ -1,4 +1,4 @@
-import { readFile } from "node:fs/promises";
+import { readFile, stat } from "node:fs/promises";
 import { createServer as createHttpServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -57,15 +57,27 @@ function sse(res: ServerResponse, event: string, data: unknown): void {
   res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
 }
 
-async function serveStatic(res: ServerResponse, entry: { file: string; type: string }): Promise<void> {
+async function serveStatic(req: IncomingMessage, res: ServerResponse, entry: { file: string; type: string }): Promise<void> {
   try {
-    const body = await readFile(entry.file);
-    res.writeHead(200, {
+    // Assets aren't fingerprinted, so cache briefly + revalidate via a weak
+    // ETag (size+mtime). Repeat loads within max-age skip the request; after
+    // that a conditional GET gets a cheap 304, and a deploy is picked up fast.
+    const st = await stat(entry.file);
+    const etag = `W/"${st.size.toString(16)}-${Math.round(st.mtimeMs).toString(16)}"`;
+    const headers: Record<string, string> = {
       "content-type": entry.type,
       "content-security-policy": htmlCsp(),
       "x-content-type-options": "nosniff",
-    });
-    res.end(body);
+      "cache-control": "public, max-age=300",
+      etag,
+    };
+    if (req.headers["if-none-match"] === etag) {
+      res.writeHead(304, headers);
+      res.end();
+      return;
+    }
+    res.writeHead(200, headers);
+    res.end(await readFile(entry.file));
   } catch {
     res.writeHead(404, { "content-type": "text/plain" }).end("Not found");
   }
@@ -88,6 +100,8 @@ async function serveIndex(res: ServerResponse): Promise<void> {
       "content-type": "text/html; charset=utf-8",
       "content-security-policy": htmlCsp(),
       "x-content-type-options": "nosniff",
+      // Rendered per request (version + includes markers) — never cache it.
+      "cache-control": "no-store",
     });
     res.end(body);
   } catch {
@@ -227,7 +241,7 @@ export function createServer(): Server {
 
     const entry = STATIC[url.pathname];
     if (req.method === "GET" && entry) {
-      void serveStatic(res, entry);
+      void serveStatic(req, res, entry);
       return;
     }
 

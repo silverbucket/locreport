@@ -38,6 +38,27 @@ describe("static serving", () => {
     expect((await res.text()).length).toBeGreaterThan(1000);
   });
 
+  it("caches static assets with a revalidation ETag", async () => {
+    const res = await fetch(`${base}/styles.css`);
+    expect(res.status).toBe(200);
+    expect(res.headers.get("cache-control")).toContain("max-age=300");
+    expect(res.headers.get("etag")).toBeTruthy();
+  });
+
+  it("returns 304 for a matching If-None-Match", async () => {
+    const first = await fetch(`${base}/styles.css`);
+    const etag = first.headers.get("etag")!;
+    await first.arrayBuffer(); // drain
+    const second = await fetch(`${base}/styles.css`, { headers: { "if-none-match": etag } });
+    expect(second.status).toBe(304);
+    expect((await second.arrayBuffer()).byteLength).toBe(0);
+  });
+
+  it("never caches the HTML document", async () => {
+    const res = await fetch(`${base}/`);
+    expect(res.headers.get("cache-control")).toBe("no-store");
+  });
+
   it("404s unknown paths", async () => {
     expect((await fetch(`${base}/nope`)).status).toBe(404);
   });
