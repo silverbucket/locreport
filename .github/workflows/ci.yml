@@ -1,0 +1,42 @@
+name: CI
+
+# Typecheck + full test suite on every PR (and on pushes to master). The suite
+# is hermetic — the end-to-end test builds a local git repo with backdated
+# commits, so no network or GitHub access is needed.
+on:
+  pull_request:
+  push:
+    branches: [master]
+
+# Cancel superseded runs on the same ref (e.g. rapid PR pushes).
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4 # version comes from package.json "packageManager"
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      # --ignore-scripts: no dependency's native build step is needed to run the
+      # suite (vitest/tsx resolve esbuild's prebuilt platform binary directly),
+      # and it sidesteps pnpm's non-interactive ERR_PNPM_IGNORED_BUILDS failure.
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile --ignore-scripts
+
+      - name: Typecheck
+        run: pnpm run typecheck
+
+      - name: Test
+        run: pnpm test
