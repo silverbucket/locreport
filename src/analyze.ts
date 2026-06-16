@@ -129,10 +129,12 @@ export async function analyzeBareRepo(
   // key omits the head, and one file is kept per param-combo, so it invalidates
   // on new commits (head changes) without unbounded growth.
   const head = await headCommit(gitDir, branch);
-  const reportKey = `${counter.name}|${branch}|${options.interval}|${byPackage ? 1 : 0}|${options.cohort ? 1 : 0}`;
+  const reportKey = `${meta.repoUrl}|${counter.name}|${branch}|${options.interval}|${byPackage ? 1 : 0}|${options.cohort ? 1 : 0}`;
   if (store) {
     const cached = await store.getReport(reportKey, head);
-    if (cached) return cached;
+    // The repo is in the key, but guard the metadata anyway: two repos sharing a
+    // head SHA (forks) must never receive each other's repoUrl/cloneUrl.
+    if (cached && cached.repoUrl === meta.repoUrl) return cached;
   }
 
   const { first, last } = await commitDateRange(gitDir, branch);
