@@ -62,7 +62,8 @@ pnpm analyze sindresorhus/slugify --cohort
 
 Groups the surviving code lines by the year they were written (using `git
 blame`). This is the slowest option, so it's off by default. In the web app, the
-**Code age** tab lets you pick a role to focus on.
+**Code age** tab lets you pick a role to focus on, and each role's totals match
+that role's code count in the main table.
 
 ### Monorepos (`--by-package`)
 
@@ -104,6 +105,13 @@ re-open the same view.
 
 To run it for others, see the [server guide](docs/operating.md).
 
+## Caching
+
+locreport caches the cloned repo and each commit's counts in
+`~/.cache/locreport`, so running the same repo again is fast. Use `--no-cache`
+to skip the cache for one run. For tuning the cache on a server, see the
+[server guide](docs/operating.md#cache-settings).
+
 ## Counting backend
 
 locreport has two counters:
@@ -125,6 +133,14 @@ pnpm typecheck
 ```
 
 The tests build a small local git repo, so they need no network or GitHub access.
+
+To build and run the web app in Docker locally:
+
+```bash
+pnpm docker:up        # build + run with docker compose
+# or
+docker build -t locreport .
+```
 
 ## Limitations
 

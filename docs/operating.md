@@ -36,7 +36,7 @@ cache in the `/cache` volume.
 - Memory, CPU, and process count are capped.
 
 Adjust the caps to fit your server, and run `docker compose up` once to check
-everything still works.
+everything still works. See `docker-compose.yml` for the exact values.
 
 Docker does not limit the size of the cache volume. Set a disk budget with
 `LOCREPORT_MAX_CACHE_MB` (see [Cache settings](#cache-settings)), and add a disk
