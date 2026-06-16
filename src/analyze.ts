@@ -7,7 +7,7 @@ import { openCache, type AnalysisCache } from "./cache.js";
 import { computeCohort } from "./cohort.js";
 import { detectPackages } from "./packages.js";
 import { getCounter, type Counter } from "./counter.js";
-import { fetchRepoInfo, parseGitHubRepo } from "./github.js";
+import { assertRepoWithinLimit, fetchRepoInfo, parseGitHubRepo } from "./github.js";
 import { cloneBare, commitAtOrBefore, commitDateRange, defaultBranch, extractCommit, repoSizeKb } from "./git.js";
 import { intervalDates } from "./intervals.js";
 import type { Cohort, CommitCounts, Interval, Report, Snapshot } from "./types.js";
@@ -60,13 +60,7 @@ export async function analyzeRepo(repoUrl: string, options: AnalyzeOptions): Pro
   // post-clone size check in analyzeBareRepo, so the API can't become a new
   // failure mode for a public instance.
   if (options.maxRepoMb) {
-    const info = await fetchRepoInfo(repo);
-    if (info.kind === "not_found") throw new Error(`Repository not found: ${repo.slug}`);
-    if (info.kind === "ok" && info.sizeKb / 1024 > options.maxRepoMb) {
-      throw new Error(
-        `Repository too large: ${Math.round(info.sizeKb / 1024)} MB exceeds the ${options.maxRepoMb} MB limit`,
-      );
-    }
+    assertRepoWithinLimit(await fetchRepoInfo(repo), repo.slug, options.maxRepoMb);
   }
 
   const useCache = options.cache !== false;

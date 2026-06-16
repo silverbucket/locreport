@@ -135,3 +135,16 @@ export async function fetchRepoInfo(repo: GitHubRepo, opts: { token?: string; ti
     clearTimeout(timer);
   }
 }
+
+/**
+ * Decide, from repo metadata, whether cloning should be blocked. Throws for a
+ * missing or over-limit repo; returns (allowing the clone) otherwise — including
+ * when info is `unavailable`, which deliberately falls through to the post-clone
+ * size guard so GitHub API flakiness can't block analyses.
+ */
+export function assertRepoWithinLimit(info: RepoInfo, slug: string, maxRepoMb: number): void {
+  if (info.kind === "not_found") throw new Error(`Repository not found: ${slug}`);
+  if (info.kind === "ok" && info.sizeKb / 1024 > maxRepoMb) {
+    throw new Error(`Repository too large: ${Math.round(info.sizeKb / 1024)} MB exceeds the ${maxRepoMb} MB limit`);
+  }
+}

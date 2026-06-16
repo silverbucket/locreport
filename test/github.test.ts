@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { fetchRepoInfo, parseGitHubRepo } from "../src/github.js";
+import { assertRepoWithinLimit, fetchRepoInfo, parseGitHubRepo, type RepoInfo } from "../src/github.js";
 
 describe("parseGitHubRepo", () => {
   it("parses https URLs", () => {
@@ -106,5 +106,26 @@ describe("fetchRepoInfo", () => {
       throw new Error("ENOTFOUND");
     });
     expect(await fetchRepoInfo(repo)).toEqual({ kind: "unavailable" });
+  });
+});
+
+describe("assertRepoWithinLimit", () => {
+  it("allows a repo at or under the limit", () => {
+    const info: RepoInfo = { kind: "ok", sizeKb: 1024 * 1024, defaultBranch: "main", private: false }; // 1 GiB
+    expect(() => assertRepoWithinLimit(info, "a/b", 2048)).not.toThrow();
+  });
+
+  it("rejects an over-limit repo", () => {
+    const info: RepoInfo = { kind: "ok", sizeKb: 5 * 1024 * 1024, defaultBranch: "main", private: false }; // 5 GiB
+    expect(() => assertRepoWithinLimit(info, "a/b", 2048)).toThrow(/too large/i);
+  });
+
+  it("rejects a missing repo", () => {
+    expect(() => assertRepoWithinLimit({ kind: "not_found" }, "a/b", 2048)).toThrow(/not found/i);
+  });
+
+  it("falls through (no throw) when the API is unavailable, so a flaky API can't block analyses", () => {
+    expect(() => assertRepoWithinLimit({ kind: "unavailable", status: 403 }, "a/b", 1)).not.toThrow();
+    expect(() => assertRepoWithinLimit({ kind: "unavailable" }, "a/b", 1)).not.toThrow();
   });
 });
