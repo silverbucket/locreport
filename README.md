@@ -154,6 +154,7 @@ limits, all env-overridable (see `docker-compose.yml`):
 | `LOCREPORT_MAX_QUEUE` | 10 | waiters before "server busy" |
 | `LOCREPORT_RATE_MAX` / `LOCREPORT_RATE_WINDOW_MS` | 30 / 60000 | per-IP rate limit |
 | `LOCREPORT_MAX_REPO_MB` | 2048 | reject bare repos larger than this |
+| `LOCREPORT_MAX_CACHE_MB` | 5120 | total cached-clone budget, LRU-evicted (0 disables) |
 | `LOCREPORT_GIT_TIMEOUT_MS` | 300000 | per git operation |
 | `LOCREPORT_ANALYSIS_TIMEOUT_MS` | 600000 | per analysis |
 
@@ -195,6 +196,11 @@ Cache lives in `~/.cache/locreport` (override with `LOCREPORT_CACHE_DIR`). Pass
 `--no-cache` for a one-off fresh clone with no reuse. Cache entries are versioned
 and auto-invalidated when counting/classification semantics change; to wipe it
 manually, delete the cache directory.
+
+Cached bare clones are kept under a total size budget (`LOCREPORT_MAX_CACHE_MB`,
+default 5 GiB) and evicted **least-recently-used** when exceeded, so a public
+instance can't be made to fill its disk by requesting many distinct repos. Set
+it to `0` to disable eviction (unbounded growth).
 
 ## Counting backend
 

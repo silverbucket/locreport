@@ -17,6 +17,7 @@ services:
       # LOCREPORT_RATE_MAX: "30"         # requests per IP per window
       # LOCREPORT_RATE_WINDOW_MS: "60000"
       # LOCREPORT_MAX_REPO_MB: "2048"    # reject bare repos larger than this
+      # LOCREPORT_MAX_CACHE_MB: "5120"   # total cached-clone budget (LRU-evicted; 0 disables)
       # LOCREPORT_GIT_TIMEOUT_MS: "300000"
       # LOCREPORT_ANALYSIS_TIMEOUT_MS: "600000"
       # --- custom head includes (see public/includes.example.html) ---
