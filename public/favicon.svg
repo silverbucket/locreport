@@ -1,7 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32" role="img" aria-label="locreport">
-  <rect width="32" height="32" rx="7" fill="#1b1f27" />
-  <rect x="6" y="14" width="4.4" height="11" rx="1.4" fill="#4f8cff" />
-  <rect x="12.5" y="8" width="4.4" height="17" rx="1.4" fill="#2dd4bf" />
-  <rect x="19" y="11.5" width="4.4" height="13.5" rx="1.4" fill="#f59e0b" />
-  <rect x="25.5" y="4" width="4.4" height="21" rx="1.4" fill="#a78bfa" />
+  <rect x="4" y="15.5" width="4.4" height="11" rx="1.4" fill="#4f8cff" />
+  <rect x="10.5" y="9.5" width="4.4" height="17" rx="1.4" fill="#2dd4bf" />
+  <rect x="17" y="13" width="4.4" height="13.5" rx="1.4" fill="#f59e0b" />
+  <rect x="23.5" y="5.5" width="4.4" height="21" rx="1.4" fill="#a78bfa" />
 </svg>

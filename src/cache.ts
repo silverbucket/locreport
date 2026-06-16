@@ -1,4 +1,5 @@
-import { access, mkdir, readFile, rename, writeFile } from "node:fs/promises";
+import type { Dirent } from "node:fs";
+import { access, mkdir, readdir, readFile, rename, rm, stat, utimes, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import path from "node:path";
 import type { CohortResult } from "./cohort.js";
@@ -32,6 +33,45 @@ function defaultRoot(): string {
   return process.env.LOCREPORT_CACHE_DIR ?? path.join(homedir(), ".cache", "locreport");
 }
 
+// Total size budget for cached bare clones (the dominant, attacker-controllable
+// disk user on a public instance). 0 disables eviction. Default 5 GiB.
+function defaultMaxBytes(): number {
+  const mb = Number(process.env.LOCREPORT_MAX_CACHE_MB);
+  return (Number.isFinite(mb) && mb >= 0 ? mb : 5120) * 1024 * 1024;
+}
+
+// Never evict a clone touched within this window — it is likely in use by an
+// in-flight analysis. The floor is 15 min, but it always covers the configured
+// analysis timeout so a long-running analysis can't have its clone evicted
+// mid-run (a concurrent prune only protects its own keep dir + this window).
+function evictGraceMs(): number {
+  const timeout = Number(process.env.LOCREPORT_ANALYSIS_TIMEOUT_MS);
+  return Math.max(15 * 60_000, Number.isFinite(timeout) && timeout > 0 ? timeout : 0);
+}
+
+/** Recursively sum the byte size of regular files under `dir` (0 if missing). */
+async function dirSize(dir: string): Promise<number> {
+  let total = 0;
+  let entries: Dirent[];
+  try {
+    entries = await readdir(dir, { withFileTypes: true });
+  } catch {
+    return 0;
+  }
+  for (const e of entries) {
+    const full = path.join(dir, e.name);
+    if (e.isDirectory()) total += await dirSize(full);
+    else if (e.isFile()) {
+      try {
+        total += (await stat(full)).size;
+      } catch {
+        // raced removal — ignore
+      }
+    }
+  }
+  return total;
+}
+
 async function exists(p: string): Promise<boolean> {
   try {
     await access(p);
@@ -59,10 +99,15 @@ export interface AnalysisCache {
   setSnapshot(counter: string, sha: string, counts: CommitCounts): Promise<void>;
   getCohort(sha: string): Promise<CohortResult | null>;
   setCohort(sha: string, cohort: CohortResult): Promise<void>;
+  /** Evict least-recently-used bare clones until under the size budget. */
+  prune(keepGitDir?: string): Promise<void>;
 }
 
 class DiskCache implements AnalysisCache {
-  constructor(readonly root: string) {}
+  constructor(
+    readonly root: string,
+    private readonly maxBytes: number,
+  ) {}
 
   private reposDir(): string {
     return path.join(this.root, "repos");
@@ -100,7 +145,55 @@ class DiskCache implements AnalysisCache {
       await mkdir(this.reposDir(), { recursive: true });
       await cloneBare(repo.cloneUrl, gitDir);
     }
+    // Mark as most-recently-used for LRU eviction, then trim the cache.
+    const now = new Date();
+    await utimes(gitDir, now, now).catch(() => {});
+    await this.prune(gitDir).catch((err) => {
+      // Housekeeping must never fail an analysis.
+      process.stderr.write(`cache prune failed: ${(err as Error).message}\n`);
+    });
     return gitDir;
+  }
+
+  async prune(keepGitDir?: string): Promise<void> {
+    if (this.maxBytes <= 0) return;
+    let entries: Dirent[];
+    try {
+      entries = await readdir(this.reposDir(), { withFileTypes: true });
+    } catch {
+      return; // no repos dir yet
+    }
+
+    const now = Date.now();
+    const grace = evictGraceMs();
+    const keep = keepGitDir ? path.resolve(keepGitDir) : null;
+    const repos: Array<{ full: string; size: number; mtimeMs: number }> = [];
+    let total = 0;
+    for (const e of entries) {
+      if (!e.isDirectory()) continue;
+      const full = path.join(this.reposDir(), e.name);
+      const size = await dirSize(full);
+      let mtimeMs = now;
+      try {
+        mtimeMs = (await stat(full)).mtimeMs;
+      } catch {
+        // raced removal — treat as fresh so we don't fight another pruner
+      }
+      total += size;
+      repos.push({ full, size, mtimeMs });
+    }
+    if (total <= this.maxBytes) return;
+
+    // Evict least-recently-used first; never the just-used clone, nor one
+    // touched within the grace window (likely mid-analysis).
+    const evictable = repos
+      .filter((r) => path.resolve(r.full) !== keep && now - r.mtimeMs > grace)
+      .sort((a, b) => a.mtimeMs - b.mtimeMs);
+    for (const r of evictable) {
+      if (total <= this.maxBytes) break;
+      await rm(r.full, { recursive: true, force: true });
+      total -= r.size;
+    }
   }
 
   async getSnapshot(counter: string, sha: string): Promise<CommitCounts | null> {
@@ -134,7 +227,10 @@ class DiskCache implements AnalysisCache {
   }
 }
 
-/** Open (and lazily create) the on-disk cache rooted at `root`. */
-export function openCache(root: string = defaultRoot()): AnalysisCache {
-  return new DiskCache(root);
+/**
+ * Open (and lazily create) the on-disk cache rooted at `root`. `maxBytes` caps
+ * the total size of cached bare clones (LRU-evicted); 0 disables eviction.
+ */
+export function openCache(root: string = defaultRoot(), maxBytes: number = defaultMaxBytes()): AnalysisCache {
+  return new DiskCache(root, maxBytes);
 }

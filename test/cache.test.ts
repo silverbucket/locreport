@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readdir, rm, utimes, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -73,5 +73,46 @@ describe("cohort cache", () => {
       JSON.stringify({ v: 2, cohort: { total: 25000, byYear: { "2026": 25000 } } }),
     );
     expect(await cache.getCohort("abc")).toBeNull();
+  });
+});
+
+describe("cache eviction (prune)", () => {
+  // Fake bare-clone dir holding a single file of `bytes`, last-used `ageMin` ago.
+  async function makeRepo(name: string, bytes: number, ageMin: number): Promise<string> {
+    const gitDir = path.join(dir, "repos", `${name}.git`);
+    await mkdir(gitDir, { recursive: true });
+    await writeFile(path.join(gitDir, "pack"), Buffer.alloc(bytes));
+    const t = new Date(Date.now() - ageMin * 60_000);
+    await utimes(gitDir, t, t);
+    return gitDir;
+  }
+  const remaining = async () => (await readdir(path.join(dir, "repos"))).sort();
+
+  it("evicts least-recently-used clones until under the size cap", async () => {
+    await makeRepo("old", 1024, 60);
+    await makeRepo("mid", 1024, 40);
+    await makeRepo("recent", 1024, 20); // all older than the 15-min grace window
+    await openCache(dir, 2048).prune(); // 3 KiB total, 2 KiB cap → drop the LRU one
+    expect(await remaining()).toEqual(["mid.git", "recent.git"]);
+  });
+
+  it("never evicts clones within the grace window, even under pressure", async () => {
+    await makeRepo("old", 1024, 60);
+    await makeRepo("fresh", 1024, 1); // within grace → protected
+    await openCache(dir, 1).prune(); // cap forces eviction of everything evictable
+    expect(await remaining()).toEqual(["fresh.git"]);
+  });
+
+  it("never evicts the keep dir, even when it is the least-recently-used", async () => {
+    const kept = await makeRepo("old", 1024, 60); // LRU and past grace, but protected as keep
+    await makeRepo("newer", 1024, 30); // also past grace → the one that must go
+    await openCache(dir, 512).prune(kept); // cap forces eviction; keep dir must survive
+    expect(await remaining()).toEqual(["old.git"]);
+  });
+
+  it("does nothing when eviction is disabled (maxBytes = 0)", async () => {
+    await makeRepo("old", 4096, 60);
+    await openCache(dir, 0).prune();
+    expect(await remaining()).toEqual(["old.git"]);
   });
 });
