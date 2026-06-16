@@ -263,7 +263,17 @@ if (isMain) {
   // so it never keeps the process alive. Best-effort — sweep errors are ignored.
   const cache = openCache();
   const sweepMs = Math.max(60_000, Number(process.env.LOCREPORT_CACHE_SWEEP_MS) || 6 * 60 * 60 * 1000);
-  const runSweep = () => void cache.sweep().catch(() => {});
+  let sweeping = false;
+  const runSweep = () => {
+    if (sweeping) return; // don't overlap if a sweep is still running
+    sweeping = true;
+    void cache
+      .sweep()
+      .catch(() => {})
+      .finally(() => {
+        sweeping = false;
+      });
+  };
   runSweep();
   setInterval(runSweep, sweepMs).unref();
 }

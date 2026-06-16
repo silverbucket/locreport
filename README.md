@@ -168,6 +168,7 @@ limits, all env-overridable (see `docker-compose.yml`):
 | `LOCREPORT_MAX_REPO_MB` | 2048 | reject bare repos larger than this |
 | `LOCREPORT_MAX_CACHE_MB` | 5120 | total cached-clone budget, LRU-evicted (0 disables) |
 | `LOCREPORT_CACHE_MAX_AGE_DAYS` | 30 | age out cached snapshots/cohorts/reports (0 disables) |
+| `LOCREPORT_CACHE_SWEEP_MS` | 21600000 | how often the server runs cache maintenance (6h) |
 | `LOCREPORT_GIT_TIMEOUT_MS` | 300000 | per git operation |
 | `LOCREPORT_ANALYSIS_TIMEOUT_MS` | 600000 | per analysis |
 | `LOCREPORT_TRUST_PROXY` | off | trust `X-Forwarded-For` for the client IP (enable only behind a proxy) |
