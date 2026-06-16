@@ -163,6 +163,14 @@ since the server clones whatever URL it's given). Put a TLS-terminating reverse
 proxy in front for public exposure; `X-Forwarded-For` is honored for rate
 limiting.
 
+`LOCREPORT_MAX_REPO_MB` is enforced **twice**: once before cloning (via a GitHub
+API size lookup) and again after, as a backstop. The pre-clone check is
+best-effort — if the GitHub API is unavailable or rate-limited it's skipped and
+the oversized repo can still be downloaded before the post-clone check rejects
+it. For a busy public instance, set **`GITHUB_TOKEN`** to raise the API rate
+limit (unauthenticated requests are capped at 60/hour per IP, shared across all
+users); the token only needs public read access (no scopes for public repos).
+
 ### Custom head includes
 
 To inject deployment-specific HTML into the page `<head>` (analytics tags, custom

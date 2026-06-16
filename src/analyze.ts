@@ -7,7 +7,7 @@ import { openCache, type AnalysisCache } from "./cache.js";
 import { computeCohort } from "./cohort.js";
 import { detectPackages } from "./packages.js";
 import { getCounter, type Counter } from "./counter.js";
-import { parseGitHubRepo } from "./github.js";
+import { assertRepoWithinLimit, fetchRepoInfo, parseGitHubRepo } from "./github.js";
 import { cloneBare, commitAtOrBefore, commitDateRange, defaultBranch, extractCommit, repoSizeKb } from "./git.js";
 import { intervalDates } from "./intervals.js";
 import type { Cohort, CommitCounts, Interval, Report, Snapshot } from "./types.js";
@@ -53,6 +53,15 @@ export type ProgressEvent =
 export async function analyzeRepo(repoUrl: string, options: AnalyzeOptions): Promise<Report> {
   const repo = parseGitHubRepo(repoUrl);
   if (!repo) throw new Error(`Not a valid GitHub repository: ${JSON.stringify(repoUrl)}`);
+
+  // Pre-clone size guard (server path only — gated on maxRepoMb). Reject an
+  // over-limit or missing repo before paying for a clone. Best-effort: if the
+  // GitHub API is unavailable (rate-limited/offline) we proceed and rely on the
+  // post-clone size check in analyzeBareRepo, so the API can't become a new
+  // failure mode for a public instance.
+  if (options.maxRepoMb) {
+    assertRepoWithinLimit(await fetchRepoInfo(repo), repo.slug, options.maxRepoMb);
+  }
 
   const useCache = options.cache !== false;
   const scratch = await mkdtemp(path.join(tmpdir(), "locreport-"));

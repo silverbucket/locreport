@@ -1,5 +1,5 @@
-import { describe, expect, it } from "vitest";
-import { parseGitHubRepo } from "../src/github.js";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { assertRepoWithinLimit, fetchRepoInfo, parseGitHubRepo, type RepoInfo } from "../src/github.js";
 
 describe("parseGitHubRepo", () => {
   it("parses https URLs", () => {
@@ -61,5 +61,71 @@ describe("parseGitHubRepo", () => {
   it("rejects invalid owner/repo characters", () => {
     expect(parseGitHubRepo("https://github.com/bad owner/repo")).toBeNull();
     expect(parseGitHubRepo("https://github.com/a/..")).toBeNull();
+  });
+});
+
+describe("fetchRepoInfo", () => {
+  const repo = parseGitHubRepo("erikbern/git-of-theseus")!;
+  afterEach(() => vi.unstubAllGlobals());
+
+  function stubFetch(impl: (url: string, init: RequestInit) => unknown) {
+    const mock = vi.fn(impl as never);
+    vi.stubGlobal("fetch", mock);
+    return mock;
+  }
+
+  it("returns size, default branch and visibility on 200", async () => {
+    stubFetch(() => ({
+      ok: true,
+      status: 200,
+      json: async () => ({ size: 4096, default_branch: "main", private: false }),
+    }));
+    expect(await fetchRepoInfo(repo)).toEqual({ kind: "ok", sizeKb: 4096, defaultBranch: "main", private: false });
+  });
+
+  it("queries api.github.com for the repo and sends an auth header when given a token", async () => {
+    const mock = stubFetch(() => ({ ok: true, status: 200, json: async () => ({ size: 1 }) }));
+    await fetchRepoInfo(repo, { token: "secret" });
+    const [url, init] = mock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe("https://api.github.com/repos/erikbern/git-of-theseus");
+    expect((init.headers as Record<string, string>).authorization).toBe("Bearer secret");
+  });
+
+  it("reports a 404 as not_found", async () => {
+    stubFetch(() => ({ ok: false, status: 404, json: async () => ({}) }));
+    expect(await fetchRepoInfo(repo)).toEqual({ kind: "not_found" });
+  });
+
+  it("reports a rate limit (403) as unavailable, not fatal", async () => {
+    stubFetch(() => ({ ok: false, status: 403, json: async () => ({}) }));
+    expect(await fetchRepoInfo(repo)).toEqual({ kind: "unavailable", status: 403 });
+  });
+
+  it("treats a network error as unavailable", async () => {
+    stubFetch(() => {
+      throw new Error("ENOTFOUND");
+    });
+    expect(await fetchRepoInfo(repo)).toEqual({ kind: "unavailable" });
+  });
+});
+
+describe("assertRepoWithinLimit", () => {
+  it("allows a repo at or under the limit", () => {
+    const info: RepoInfo = { kind: "ok", sizeKb: 1024 * 1024, defaultBranch: "main", private: false }; // 1 GiB
+    expect(() => assertRepoWithinLimit(info, "a/b", 2048)).not.toThrow();
+  });
+
+  it("rejects an over-limit repo", () => {
+    const info: RepoInfo = { kind: "ok", sizeKb: 5 * 1024 * 1024, defaultBranch: "main", private: false }; // 5 GiB
+    expect(() => assertRepoWithinLimit(info, "a/b", 2048)).toThrow(/too large/i);
+  });
+
+  it("rejects a missing repo", () => {
+    expect(() => assertRepoWithinLimit({ kind: "not_found" }, "a/b", 2048)).toThrow(/not found/i);
+  });
+
+  it("falls through (no throw) when the API is unavailable, so a flaky API can't block analyses", () => {
+    expect(() => assertRepoWithinLimit({ kind: "unavailable", status: 403 }, "a/b", 1)).not.toThrow();
+    expect(() => assertRepoWithinLimit({ kind: "unavailable" }, "a/b", 1)).not.toThrow();
   });
 });
