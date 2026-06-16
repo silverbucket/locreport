@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { openCache } from "../src/cache.js";
-import type { Bucket, CommitCounts, Role } from "../src/types.js";
+import type { Bucket, CommitCounts, Report, Role } from "../src/types.js";
 
 function bucket(code: number): Bucket {
   return { code, comment: 0, blank: 0, files: 1 };
@@ -13,6 +13,16 @@ function counts(appCode: number): CommitCounts {
   const byRole = Object.fromEntries(roles.map((r) => [r, bucket(0)])) as Record<Role, Bucket>;
   byRole.app = bucket(appCode);
   return { byRole };
+}
+function report(snaps: number): Report {
+  return {
+    repoUrl: "https://github.com/a/b",
+    cloneUrl: "https://github.com/a/b.git",
+    branch: "main",
+    interval: "1y",
+    generatedAt: "2026-01-01T00:00:00.000Z",
+    snapshots: Array.from({ length: snaps }, (_, i) => ({ date: `202${i}-01-01`, sha: `s${i}`, byRole: counts(i).byRole })),
+  };
 }
 
 let dir: string;
@@ -73,6 +83,36 @@ describe("cohort cache", () => {
       JSON.stringify({ v: 2, cohort: { total: 25000, byYear: { "2026": 25000 } } }),
     );
     expect(await cache.getCohort("abc")).toBeNull();
+  });
+});
+
+describe("report cache", () => {
+  it("round-trips a report keyed by params + head sha", async () => {
+    const cache = openCache(dir);
+    expect(await cache.getReport("k", "head1")).toBeNull();
+    await cache.setReport("k", "head1", report(2));
+    expect(await cache.getReport("k", "head1")).toEqual(report(2));
+  });
+
+  it("misses when the head moved (new commits)", async () => {
+    const cache = openCache(dir);
+    await cache.setReport("k", "head1", report(1));
+    expect(await cache.getReport("k", "head2")).toBeNull();
+  });
+
+  it("keeps one file per key — a new head overwrites the old report", async () => {
+    const cache = openCache(dir);
+    await cache.setReport("k", "head1", report(1));
+    await cache.setReport("k", "head2", report(3));
+    expect(await cache.getReport("k", "head1")).toBeNull(); // old head gone
+    expect((await cache.getReport("k", "head2"))?.snapshots.length).toBe(3);
+    expect((await readdir(path.join(dir, "reports"))).length).toBe(1);
+  });
+
+  it("separates entries by key", async () => {
+    const cache = openCache(dir);
+    await cache.setReport("app:1y", "head", report(1));
+    expect(await cache.getReport("app:1m", "head")).toBeNull();
   });
 });
 

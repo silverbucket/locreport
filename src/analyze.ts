@@ -8,7 +8,15 @@ import { computeCohort, createLimiter } from "./cohort.js";
 import { detectPackages } from "./packages.js";
 import { getCounter, type Counter } from "./counter.js";
 import { assertRepoWithinLimit, fetchRepoInfo, parseGitHubRepo } from "./github.js";
-import { cloneBare, commitAtOrBefore, commitDateRange, defaultBranch, extractCommit, repoSizeKb } from "./git.js";
+import {
+  cloneBare,
+  commitAtOrBefore,
+  commitDateRange,
+  defaultBranch,
+  extractCommit,
+  headCommit,
+  repoSizeKb,
+} from "./git.js";
 import { intervalDates } from "./intervals.js";
 import type { Cohort, CommitCounts, Interval, Report, Snapshot } from "./types.js";
 
@@ -111,6 +119,22 @@ export async function analyzeBareRepo(
   }
 
   const branch = options.branch ?? (await defaultBranch(gitDir));
+  const counter = options.counter ?? (await getCounter());
+  const byPackage = options.byPackage ?? false;
+  const store = options.store;
+
+  // Report-level cache: keyed by the analysis params and validated against the
+  // branch head SHA. A warm hit skips the whole sha-resolution + assembly (and
+  // the cohort reads), serving repeated identical requests near-instantly. The
+  // key omits the head, and one file is kept per param-combo, so it invalidates
+  // on new commits (head changes) without unbounded growth.
+  const head = await headCommit(gitDir, branch);
+  const reportKey = `${counter.name}|${branch}|${options.interval}|${byPackage ? 1 : 0}|${options.cohort ? 1 : 0}`;
+  if (store) {
+    const cached = await store.getReport(reportKey, head);
+    if (cached) return cached;
+  }
+
   const { first, last } = await commitDateRange(gitDir, branch);
   const dates = intervalDates(first, last, options.interval);
 
@@ -120,10 +144,6 @@ export async function analyzeBareRepo(
     const sha = await commitAtOrBefore(gitDir, branch, date);
     if (sha) points.push({ date, sha });
   }
-
-  const counter = options.counter ?? (await getCounter());
-  const byPackage = options.byPackage ?? false;
-  const store = options.store;
 
   // Unique shas (multiple boundaries can resolve to the same commit), with the
   // first boundary date for each — used only for progress display.
@@ -197,7 +217,7 @@ export async function analyzeBareRepo(
     };
   });
 
-  return {
+  const report: Report = {
     repoUrl: meta.repoUrl,
     cloneUrl: meta.cloneUrl,
     branch,
@@ -205,6 +225,8 @@ export async function analyzeBareRepo(
     generatedAt: new Date().toISOString(),
     snapshots,
   };
+  if (store) await store.setReport(reportKey, head, report);
+  return report;
 }
 
 /** Run `fn` over `items` with at most `limit` concurrent executions. */

@@ -111,6 +111,11 @@ export async function commitAtOrBefore(gitDir: string, branch: string, isoDate: 
   return out || null;
 }
 
+/** The tip commit SHA of `branch` — the report cache's invalidation key. */
+export async function headCommit(gitDir: string, branch: string): Promise<string> {
+  return (await git(["--git-dir", gitDir, "rev-parse", "--verify", `${branch}^{commit}`])).trim();
+}
+
 /** List all file paths tracked at `sha` (repo-relative, POSIX). */
 export async function listTreeFiles(gitDir: string, sha: string): Promise<string[]> {
   const out = await git(["--git-dir", gitDir, "ls-tree", "-r", "--name-only", sha], {
