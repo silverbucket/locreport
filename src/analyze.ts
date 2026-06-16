@@ -168,8 +168,13 @@ export async function analyzeBareRepo(
   if (options.cohort) {
     const concurrency = options.concurrency ?? DEFAULT_CONCURRENCY;
     const blameLimit = createLimiter(concurrency);
+    // Overlap only a few commits at once — enough to keep the shared blame
+    // budget fed and fill per-commit tails, without queueing every in-flight
+    // commit's per-file closures (which would grow memory ~commits × files on
+    // huge monorepos). Actual blame concurrency is bounded by blameLimit.
+    const commitConcurrency = Math.min(concurrency, 4);
     let ci = 0;
-    await mapPool(uniqueShas, concurrency, async (sha) => {
+    await mapPool(uniqueShas, commitConcurrency, async (sha) => {
       let cohort = store ? await store.getCohort(sha) : null;
       const wasCached = cohort !== null;
       if (!cohort) {
