@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { BusyError, RateLimiter, Semaphore, clientIp } from "../src/server/limits.js";
+import { BusyError, clientIp, InFlightTracker, RateLimiter, Semaphore } from "../src/server/limits.js";
 
 const tick = () => new Promise<void>((r) => setImmediate(r));
 
@@ -94,5 +94,37 @@ describe("clientIp", () => {
   it("falls back to the socket address when trustProxy is set but no header is present", () => {
     const req = { headers: {}, socket: { remoteAddress: "::ffff:192.168.1.5" } } as never;
     expect(clientIp(req, true)).toBe("192.168.1.5");
+  });
+});
+
+describe("InFlightTracker", () => {
+  it("admits up to max concurrent per key, then rejects", () => {
+    const t = new InFlightTracker();
+    expect(t.tryEnter("a", 2)).toBe(true);
+    expect(t.tryEnter("a", 2)).toBe(true);
+    expect(t.tryEnter("a", 2)).toBe(false); // a is at the cap
+    expect(t.inFlight("a")).toBe(2);
+  });
+
+  it("tracks keys independently", () => {
+    const t = new InFlightTracker();
+    t.tryEnter("a", 1);
+    expect(t.tryEnter("a", 1)).toBe(false);
+    expect(t.tryEnter("b", 1)).toBe(true); // b unaffected by a
+  });
+
+  it("frees a slot on exit so the key can enter again", () => {
+    const t = new InFlightTracker();
+    t.tryEnter("a", 1);
+    expect(t.tryEnter("a", 1)).toBe(false);
+    t.exit("a");
+    expect(t.inFlight("a")).toBe(0);
+    expect(t.tryEnter("a", 1)).toBe(true);
+  });
+
+  it("ignores exit for an unknown key (no underflow)", () => {
+    const t = new InFlightTracker();
+    t.exit("ghost");
+    expect(t.inFlight("ghost")).toBe(0);
   });
 });
