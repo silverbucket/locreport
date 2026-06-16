@@ -145,6 +145,13 @@ The image is a hardened multi-stage build: it runs as a non-root user, bundles
 production dependencies, persists the cache in a `/cache` volume, and ships a
 healthcheck.
 
+`docker-compose.yml` also sandboxes the **runtime**: a read-only root filesystem,
+all Linux capabilities dropped, `no-new-privileges`, and `mem_limit` / `cpus` /
+`pids_limit` caps so a pathological repo can't exhaust the host. The container
+writes only to the `/cache` volume and a small `/tmp` tmpfs; tree-extraction
+scratch is pointed at `/cache` (via `TMPDIR`) so large repos use disk, not RAM.
+Tune the caps to your host and smoke-test with `docker compose up`.
+
 Because the web endpoint clones user-supplied repos, it ships with safety
 limits, all env-overridable (see `docker-compose.yml`):
 

@@ -11,6 +11,9 @@ services:
     environment:
       PORT: "4317"
       LOCREPORT_CACHE_DIR: /cache
+      # Route tree-extraction scratch to the disk-backed cache volume — the rootfs
+      # is read-only and /tmp is a small tmpfs, so large repos don't fill RAM.
+      TMPDIR: /cache
       # --- safety limits (defaults shown; uncomment to tune) ---
       # LOCREPORT_MAX_CONCURRENT: "2"    # simultaneous analyses (server-wide)
       # LOCREPORT_MAX_PER_IP: "2"        # simultaneous analyses per client IP (running + queued)
@@ -28,6 +31,18 @@ services:
       # --- custom head includes (see public/includes.example.html) ---
       # LOCREPORT_INCLUDES_FILE: /app/public/includes.html
       # LOCREPORT_CSP: "default-src 'self'"   # loosen if includes load external/inline assets
+
+    # --- container hardening (tune to your host; `docker compose up` to smoke-test) ---
+    read_only: true                  # rootfs read-only; the app writes only to /cache and /tmp
+    tmpfs:
+      - /tmp:size=64m                # small scratch for incidental tooling; large trees go to /cache (TMPDIR)
+    mem_limit: 2g                    # cap memory — counting / git blame can spike on huge repos
+    cpus: "2"                        # cap CPU
+    pids_limit: 512                  # cap process count (git / cloc subprocesses)
+    cap_drop:
+      - ALL                          # drop all Linux capabilities
+    security_opt:
+      - no-new-privileges:true       # block setuid privilege escalation
     restart: unless-stopped
 
 volumes:
