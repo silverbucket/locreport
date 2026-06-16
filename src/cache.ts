@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import type { Dirent } from "node:fs";
 import { access, mkdir, readdir, readFile, rename, rm, stat, utimes, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
@@ -5,7 +6,7 @@ import path from "node:path";
 import type { CohortResult } from "./cohort.js";
 import { cloneBare, fetchBare } from "./git.js";
 import type { GitHubRepo } from "./github.js";
-import type { CommitCounts } from "./types.js";
+import type { CommitCounts, Report } from "./types.js";
 
 /**
  * On-disk cache for analysis.
@@ -28,6 +29,11 @@ const CACHE_VERSION = 2;
 // v3: cohort counts code lines only (was all physical lines across roles).
 // v4: cohort shape gained per-role year buckets (byRoleYear).
 const COHORT_VERSION = 4;
+// Assembled-report cache. Its version embeds CACHE_VERSION + COHORT_VERSION so a
+// bump in either (the report embeds both kinds of data) invalidates stored
+// reports without a separate bump. Increment the leading number for Report
+// shape changes.
+const REPORT_VERSION = `1.${CACHE_VERSION}.${COHORT_VERSION}`;
 
 function defaultRoot(): string {
   return process.env.LOCREPORT_CACHE_DIR ?? path.join(homedir(), ".cache", "locreport");
@@ -91,6 +97,13 @@ interface CohortFile {
   cohort: CohortResult;
 }
 
+interface ReportFile {
+  v: string;
+  /** Branch head SHA the report was assembled from; a mismatch means it's stale. */
+  head: string;
+  report: Report;
+}
+
 export interface AnalysisCache {
   readonly root: string;
   /** Ensure a fresh-enough bare clone exists for `repo`; returns its git dir. */
@@ -99,6 +112,9 @@ export interface AnalysisCache {
   setSnapshot(counter: string, sha: string, counts: CommitCounts): Promise<void>;
   getCohort(sha: string): Promise<CohortResult | null>;
   setCohort(sha: string, cohort: CohortResult): Promise<void>;
+  /** Assembled report for `key`, if cached for the current branch `head`. */
+  getReport(key: string, head: string): Promise<Report | null>;
+  setReport(key: string, head: string, report: Report): Promise<void>;
   /** Evict least-recently-used bare clones until under the size budget. */
   prune(keepGitDir?: string): Promise<void>;
 }
@@ -126,6 +142,13 @@ class DiskCache implements AnalysisCache {
 
   private cohortPath(sha: string): string {
     return path.join(this.root, "cohorts", `${sha}.json`);
+  }
+
+  // One file per param-key (hashed), overwritten when the head moves — so report
+  // files stay bounded by distinct params, not by history.
+  private reportPath(key: string): string {
+    const safe = createHash("sha1").update(key).digest("hex");
+    return path.join(this.root, "reports", `${safe}.json`);
   }
 
   private async writeAtomic(file: string, payload: unknown): Promise<void> {
@@ -224,6 +247,20 @@ class DiskCache implements AnalysisCache {
 
   async setCohort(sha: string, cohort: CohortResult): Promise<void> {
     await this.writeAtomic(this.cohortPath(sha), { v: COHORT_VERSION, cohort } satisfies CohortFile);
+  }
+
+  async getReport(key: string, head: string): Promise<Report | null> {
+    try {
+      const parsed = JSON.parse(await readFile(this.reportPath(key), "utf8")) as ReportFile;
+      if (parsed.v !== REPORT_VERSION || parsed.head !== head || !parsed.report) return null;
+      return parsed.report;
+    } catch {
+      return null;
+    }
+  }
+
+  async setReport(key: string, head: string, report: Report): Promise<void> {
+    await this.writeAtomic(this.reportPath(key), { v: REPORT_VERSION, head, report } satisfies ReportFile);
   }
 }
 

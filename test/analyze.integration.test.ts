@@ -240,6 +240,44 @@ describe("analyzeBareRepo (end-to-end, builtin counter)", () => {
     }
   });
 
+  it("serves a whole report from the report cache (no counting, even with per-commit cache gone)", async () => {
+    const cacheDir = await mkdtemp(path.join(tmpdir(), "locreport-reportcache-"));
+    const store = openCache(cacheDir);
+    const spy = new SpyCounter();
+    const meta = { repoUrl: "https://github.com/test/repo", cloneUrl: "https://github.com/test/repo.git" };
+    const opts = { interval: "1y" as const, counter: spy, store };
+
+    try {
+      const first = await analyzeBareRepo(gitDir, workRoot, meta, opts);
+      const callsAfterFirst = spy.calls;
+      // Remove the per-commit snapshot cache, leaving only the assembled report.
+      await rm(path.join(cacheDir, "snapshots"), { recursive: true, force: true });
+
+      const second = await analyzeBareRepo(gitDir, workRoot, meta, opts);
+      // No re-counting despite missing snapshots → the report cache served it.
+      expect(spy.calls).toBe(callsAfterFirst);
+      expect(second).toEqual(first);
+    } finally {
+      await rm(cacheDir, { recursive: true, force: true });
+    }
+  });
+
+  it("does not share report-cache entries between different repos at the same head", async () => {
+    const cacheDir = await mkdtemp(path.join(tmpdir(), "locreport-reportrepo-"));
+    const store = openCache(cacheDir);
+    const opts = { interval: "1y" as const, counter: new BuiltinCounter(), store };
+
+    try {
+      const a = await analyzeBareRepo(gitDir, workRoot, { repoUrl: "https://github.com/a/one", cloneUrl: "https://github.com/a/one.git" }, opts);
+      // Same gitDir (same head SHA) but a different repo identity.
+      const b = await analyzeBareRepo(gitDir, workRoot, { repoUrl: "https://github.com/b/two", cloneUrl: "https://github.com/b/two.git" }, opts);
+      expect(a.repoUrl).toBe("https://github.com/a/one");
+      expect(b.repoUrl).toBe("https://github.com/b/two"); // not a's report
+    } finally {
+      await rm(cacheDir, { recursive: true, force: true });
+    }
+  });
+
   it("samples fewer snapshots at a coarser-than-history interval", async () => {
     const report = await analyzeBareRepo(
       gitDir,
