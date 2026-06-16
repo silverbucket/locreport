@@ -4,7 +4,7 @@ import { cpus, tmpdir } from "node:os";
 import path from "node:path";
 import { aggregateByPackage, aggregateByRole, classifyFiles } from "./aggregate.js";
 import { openCache, type AnalysisCache } from "./cache.js";
-import { computeCohort } from "./cohort.js";
+import { computeCohort, createLimiter } from "./cohort.js";
 import { detectPackages } from "./packages.js";
 import { getCounter, type Counter } from "./counter.js";
 import { assertRepoWithinLimit, fetchRepoInfo, parseGitHubRepo } from "./github.js";
@@ -161,19 +161,29 @@ export async function analyzeBareRepo(
 
   // Optional code-age cohort: blame each unique commit (cached per sha). This is
   // the heavy phase, so it runs only on request and reuses the disk cache.
+  // Commits are computed in parallel, but all blames share one concurrency
+  // budget so the per-file parallelism inside computeCohort doesn't multiply
+  // into CPU/memory over-subscription.
   const cohortBySha = new Map<string, Cohort>();
   if (options.cohort) {
+    const concurrency = options.concurrency ?? DEFAULT_CONCURRENCY;
+    const blameLimit = createLimiter(concurrency);
+    // Overlap only a few commits at once — enough to keep the shared blame
+    // budget fed and fill per-commit tails, without queueing every in-flight
+    // commit's per-file closures (which would grow memory ~commits × files on
+    // huge monorepos). Actual blame concurrency is bounded by blameLimit.
+    const commitConcurrency = Math.min(concurrency, 4);
     let ci = 0;
-    for (const sha of uniqueShas) {
+    await mapPool(uniqueShas, commitConcurrency, async (sha) => {
       let cohort = store ? await store.getCohort(sha) : null;
       const wasCached = cohort !== null;
       if (!cohort) {
-        cohort = await computeCohort(gitDir, sha);
+        cohort = await computeCohort(gitDir, sha, blameLimit);
         if (store) await store.setCohort(sha, cohort);
       }
       cohortBySha.set(sha, cohort);
       options.onProgress?.({ type: "cohort", index: ++ci, total, date: firstDate.get(sha)!, cached: wasCached });
-    }
+    });
   }
 
   const snapshots: Snapshot[] = points.map((p) => {
