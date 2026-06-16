@@ -109,18 +109,43 @@ To clear the cache by hand, delete the cache directory.
 
 ## Custom page content
 
-You can add your own HTML to the page `<head>` (for example, analytics) without
-committing it. Put it in `public/includes.html` — it's git-ignored and added to
-the page when present. See
-[`public/includes.example.html`](../public/includes.example.html) for an example.
+You can add your own HTML to the page `<head>` (for example, an analytics
+snippet) without committing it. The server adds the contents of an include file
+to every page. See
+[`public/includes.example.html`](../public/includes.example.html) for the format.
 
 | Setting | Default | What it does |
 | --- | --- | --- |
 | `LOCREPORT_INCLUDES_FILE` | `public/includes.html` | path to the include file |
 | `LOCREPORT_CSP` | locked to your site | override the Content-Security-Policy |
 
-The page normally only allows content from your own site. If your include loads
-anything from another site, set `LOCREPORT_CSP` to allow it.
+**Using the published image.** The image doesn't contain an include file, so
+mount yours into the container at `/app/public/includes.html`:
+
+```yaml
+services:
+  locreport:
+    image: ghcr.io/silverbucket/locreport
+    volumes:
+      - locreport-cache:/cache
+      - ./includes.html:/app/public/includes.html:ro
+```
+
+(With `docker run`, add `-v "$PWD/includes.html:/app/public/includes.html:ro"`.)
+You can mount it anywhere instead and point `LOCREPORT_INCLUDES_FILE` at it. The
+read-only mount works fine with the read-only container.
+
+**Building your own image.** Put the file at `public/includes.html` before
+building; it's git-ignored and copied into the image.
+
+**Allowing other sites.** The page normally only allows content from your own
+site, so an include that loads a script or sends data to another site is blocked.
+Set `LOCREPORT_CSP` to allow that site. For example, for an analytics script at
+`https://stats.example.com`:
+
+```
+LOCREPORT_CSP=default-src 'self'; script-src 'self' 'unsafe-inline' https://stats.example.com; img-src 'self' https://stats.example.com; connect-src 'self' https://stats.example.com; style-src 'self' 'unsafe-inline'; object-src 'none'; base-uri 'none'
+```
 
 ## Public site checklist
 
