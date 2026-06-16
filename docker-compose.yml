@@ -1,3 +1,4 @@
+# locreport web server. See docs/operating.md for what these settings do.
 services:
   locreport:
     build: .
