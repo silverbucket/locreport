@@ -1,57 +1,55 @@
 # locreport
 
-Analyze a **GitHub** repository's lines of code **over time**, intelligently split
-by the *role* each file plays — actual application code vs. tests vs. config vs.
-docs vs. data — with comment lines tracked separately and build/vendored code
-excluded. Use it from the **command line**, as a **self-hosted web app**, or as a
-**Docker image**.
+Count a **GitHub** repository's lines of code **over time**, split by what each
+file is for — app code, tests, config, docs, or data. Comments are counted
+separately, and build and vendored files are left out.
 
-A single lines-of-code total can't tell whether a project is growing because the
-application code is growing, or because tests, docs and config are accumulating
-around it. locreport counts each role separately, across the repository's whole
-history, so those trends move independently.
+A single line count can't tell you whether a project is growing because the app
+is growing or because tests and docs are piling up. locreport tracks each kind on
+its own, across the project's whole history, so you can see what's really
+changing.
+
+Use it from the **command line**, as a **web app**, or as a **Docker image**.
 
 ## How it works
 
-For a repo, at each interval boundary (yearly by default):
+For each point in time (yearly by default), locreport:
 
-1. Find the last commit on/before that date.
-2. Extract that commit's tree (`git archive`).
-3. Count every source file's **code / comment / blank** lines.
-4. Classify each file into a **role** by its path.
-5. Aggregate per role into a snapshot.
+1. Finds the last commit on or before that date.
+2. Reads that commit's files.
+3. Counts each file's code, comment, and blank lines.
+4. Sorts each file into a role by its path.
+5. Adds up the totals per role.
 
-The result is a per-interval table of LOC by role.
+The result is a table of lines of code by role, over time.
 
 ### Roles
 
-| Role         | Counted? | Examples |
-| ------------ | -------- | -------- |
-| `app`        | ✅ (the *actual* app) | `src/**`, anything not matched below |
-| `test`       | ✅ | `test/`, `__tests__/`, `integration/`, `stress-tests/`, `e2e/`, `*.test.ts`, `*_test.go`, `*_spec.rb` |
-| `config`     | ✅ | `*.yml`, `*.toml`, `*.config.*`, `.env*`, `package.json` |
-| `docs`       | ✅ | `*.md`, `*.rst`, `docs/` |
-| `data`       | ✅ | `*.json`, `*.csv`, `*.xml`, fixtures |
-| `build`      | ❌ excluded | `Dockerfile`, `Makefile`, `.github/workflows/`, eslint/webpack/tsconfig |
-| `vendored`   | ❌ excluded | `node_modules/`, `vendor/`, `dist/`, `*.min.js`, lockfiles, generated |
+| Role | Counted? | Examples |
+| --- | --- | --- |
+| `app` | ✅ (the actual app) | `src/**`, anything not matched below |
+| `test` | ✅ | `test/`, `__tests__/`, `e2e/`, `*.test.ts`, `*_test.go`, `*_spec.rb` |
+| `config` | ✅ | `*.yml`, `*.toml`, `*.config.*`, `.env*`, `package.json` |
+| `docs` | ✅ | `*.md`, `*.rst`, `docs/` |
+| `data` | ✅ | `*.json`, `*.csv`, `*.xml`, fixtures |
+| `build` | ❌ excluded | `Dockerfile`, `Makefile`, `.github/workflows/` |
+| `vendored` | ❌ excluded | `node_modules/`, `vendor/`, `dist/`, `*.min.js`, lockfiles |
 
-Rules live in `src/classifier.ts` as an **ordered, first-match-wins** list — easy
-to tweak.
+The rules live in `src/classifier.ts` and are easy to adjust.
 
 ## Usage
 
 ```bash
 pnpm install
 
-# yearly (default)
+# yearly (the default)
 pnpm analyze erikbern/git-of-theseus
 pnpm analyze XAMPPRocky/tokei --interval 6m
 pnpm analyze owner/repo --json > report.json
 ```
 
-Accepts `owner/repo`, `https://github.com/owner/repo[.git]`, or
-`git@github.com:owner/repo.git`. **Only github.com is accepted** (this also acts
-as an SSRF guard, since the tool clones whatever it's given).
+You can pass `owner/repo`, a full `https://github.com/owner/repo` URL, or an SSH
+URL. Only `github.com` repos are accepted.
 
 Options: `--interval 1m|3m|6m|1y`, `--branch <name>`, `--by-package`, `--cohort`,
 `--no-cache`, `--json`.
@@ -62,14 +60,9 @@ Options: `--interval 1m|3m|6m|1y`, `--branch <name>`, `--by-package`, `--cohort`
 pnpm analyze sindresorhus/slugify --cohort
 ```
 
-Groups each snapshot's surviving **code lines by the year they were authored**
-(theseus-style), via `git blame`. Only code lines are counted (comments/blanks
-excluded). The cohort is bucketed **per role**, so the web UI's **Code age** tab
-has a role selector (default **App code**, plus Tests/Config/Docs/Data and "All
-counted"); each scope reconciles exactly with the matching role's code count
-(App-scoped cohort == the App column; "All counted" == the Total column). The
-CLI prints the latest snapshot's overall age breakdown. It's the heaviest
-analysis (a blame pass per commit), so it's opt-in and cached per commit.
+Groups the surviving code lines by the year they were written (using `git
+blame`). This is the slowest option, so it's off by default. In the web app, the
+**Code age** tab lets you pick a role to focus on.
 
 ### Monorepos (`--by-package`)
 
@@ -77,7 +70,7 @@ analysis (a blame pass per commit), so it's opt-in and cached per commit.
 pnpm analyze vuejs/core --by-package
 ```
 
-adds a per-package breakdown on top of the repo-wide table:
+Adds a per-package breakdown on top of the repo-wide table:
 
 ```
 Package                    App   Tests  Config   Docs  Comments   Total
@@ -87,200 +80,59 @@ Package                    App   Tests  Config   Docs  Comments   Total
 (root)                   1,478       0     146  3,649       257   5,318
 ```
 
-Detection is **workspace-aware**: it reads the workspace declaration
-(`pnpm-workspace.yaml`, npm/yarn `workspaces`, `lerna.json`, Cargo
-`[workspace] members`, or `go.work`) and treats only declared members as
-packages. With no workspace declaration it falls back to treating any directory
-containing a package manifest as a package (ignoring vendored dirs). Each file
-is assigned to its **nearest ancestor package**, and files above any package go
-to `(root)`. Detection runs per commit, so packages appear/grow over time.
+locreport finds packages from the workspace setup (`pnpm-workspace.yaml`, npm or
+yarn `workspaces`, `lerna.json`, Cargo, or `go.work`). If there's no workspace
+config, it treats any folder with a package manifest as a package. Each file
+counts toward its nearest package.
 
-The CLI table shows the latest snapshot; the full per-snapshot package history
-is in `--json` output for charting.
-
-## Web UI
+## Web app
 
 ```bash
-pnpm web          # → http://localhost:4317  (set PORT to change)
+pnpm web          # http://localhost:4317  (set PORT to change)
 ```
 
-Enter a GitHub repo, pick an interval, and hit **Analyze**. The page streams live
-progress over Server-Sent Events while the repo is cloned and sampled, then shows
-a chart and table with three switchable views:
+Enter a GitHub repo, pick an interval, and click **Analyze**. The page shows a
+chart and table with three views:
 
-- **By role** — stacked-area chart of LOC by role over time, with a per-interval table.
-- **By package** — the same over time for a chosen metric, with a per-package table (monorepo-aware).
-- **Code age** — surviving lines bucketed by the year they were authored (runs `git blame`, same as the CLI's `--cohort`).
+- **By role** — lines of code by role over time.
+- **By package** — the same, per package (for monorepos).
+- **Code age** — surviving lines by the year they were written.
 
-Toggle **Stacked** (area/composition) vs unstacked **lines** (growth rates), click
-a legend entry to **isolate** a series, **export** the table as CSV or the full
-report as JSON, and **share the URL** — repo, interval, view, metric and stacked
-state are encoded in the query string and re-run automatically on load.
+You can switch between stacked and line charts, click a legend entry to focus on
+one series, export the table as CSV or the report as JSON, and share the URL to
+re-open the same view.
 
-It's a dependency-light Node HTTP server (`src/server/server.ts`) that reuses the
-same engine as the CLI. Chart.js is self-hosted (no CDN), and the page runs under
-a locked-down `default-src 'self'` CSP. Repo-controlled strings (package names)
-are HTML-escaped before rendering.
-
-## Deploy (self-host with Docker)
-
-Run the published multi-arch image from GHCR:
-
-```bash
-docker run -p 4317:4317 -v locreport-cache:/cache ghcr.io/silverbucket/locreport
-```
-
-`:latest` tracks the most recent release; pin a version tag (e.g. `:1.1.0`) for
-reproducible deploys, or use `:edge` to track `master`. To build locally instead:
-
-```bash
-pnpm docker:up      # build + run on http://localhost:4317 (docker compose)
-# or:
-docker build -t locreport .
-docker run -p 4317:4317 -v locreport-cache:/cache locreport
-```
-
-The image is a hardened multi-stage build: it runs as a non-root user, bundles
-`git` and `cloc` (so the accurate counter is used automatically), installs only
-production dependencies, persists the cache in a `/cache` volume, and ships a
-healthcheck.
-
-`docker-compose.yml` also sandboxes the **runtime**: a read-only root filesystem,
-all Linux capabilities dropped, `no-new-privileges`, and `mem_limit` / `cpus` /
-`pids_limit` caps so a pathological repo can't exhaust the host. The container
-writes only to the `/cache` volume and a small `/tmp` tmpfs; tree-extraction
-scratch is pointed at `/cache` (via `TMPDIR`) so large repos use disk, not RAM.
-Tune the caps to your host and smoke-test with `docker compose up`.
-
-Docker doesn't cap the cache volume's size — bound disk use with
-`LOCREPORT_MAX_CACHE_MB` (above) and, if the volume is on a shared filesystem, a
-host/volume quota as a hard backstop.
-
-Because the web endpoint clones user-supplied repos, it ships with safety
-limits, all env-overridable (see `docker-compose.yml`):
-
-| Env var | Default | Purpose |
-| --- | --- | --- |
-| `LOCREPORT_MAX_CONCURRENT` | 2 | simultaneous analyses (server-wide) |
-| `LOCREPORT_MAX_PER_IP` | 2 | simultaneous analyses per client IP (running + queued) |
-| `LOCREPORT_MAX_QUEUE` | 10 | waiters before "server busy" |
-| `LOCREPORT_RATE_MAX` / `LOCREPORT_RATE_WINDOW_MS` | 30 / 60000 | per-IP rate limit |
-| `LOCREPORT_MAX_REPO_MB` | 2048 | reject bare repos larger than this |
-| `LOCREPORT_MAX_CACHE_MB` | 5120 | total cached-clone budget, LRU-evicted (0 disables) |
-| `LOCREPORT_CACHE_MAX_AGE_DAYS` | 30 | age out cached snapshots/cohorts/reports (0 disables) |
-| `LOCREPORT_CACHE_SWEEP_MS` | 21600000 | how often the server runs cache maintenance (6h) |
-| `LOCREPORT_GIT_TIMEOUT_MS` | 300000 | per git operation |
-| `LOCREPORT_ANALYSIS_TIMEOUT_MS` | 600000 | per analysis |
-| `LOCREPORT_TRUST_PROXY` | off | trust `X-Forwarded-For` for the client IP (enable only behind a proxy) |
-
-These complement the built-in **github.com-only** guard (an SSRF safeguard,
-since the server clones whatever URL it's given). Put a TLS-terminating reverse
-proxy in front for public exposure.
-
-The rate limiter and the per-IP cap both key on the client IP. By default the
-server uses the socket peer address and **ignores `X-Forwarded-For`**, since a
-directly-exposed server would otherwise let any client spoof the header and mint
-unlimited buckets. When you run behind a trusted reverse proxy that sets
-`X-Forwarded-For`, set **`LOCREPORT_TRUST_PROXY=1`** so the real client IP (the
-first hop) is used — otherwise every request shares the proxy's address and the
-per-IP limits apply to all users at once.
-
-`LOCREPORT_MAX_PER_IP` caps how many analyses one client can have running or
-queued at once, so a single client can't occupy every slot and fill the queue.
-It's a no-op at the default `MAX_CONCURRENT=2`, but becomes the fairness control
-once you raise concurrency for a busier instance.
-
-`LOCREPORT_MAX_REPO_MB` is enforced **twice**: once before cloning (via a GitHub
-API size lookup) and again after, as a backstop. The pre-clone check is
-best-effort — if the GitHub API is unavailable or rate-limited it's skipped and
-the oversized repo can still be downloaded before the post-clone check rejects
-it. For a busy public instance, set **`GITHUB_TOKEN`** to raise the API rate
-limit (unauthenticated requests are capped at 60/hour per IP, shared across all
-users); the token only needs public read access (no scopes for public repos).
-
-### Custom head includes
-
-To inject deployment-specific HTML into the page `<head>` (analytics tags, custom
-meta, verification tokens, …) without committing it to source control, drop a
-file at `public/includes.html`. It's gitignored, baked into the image at build
-time when present, and spliced into every page load. See
-[`public/includes.example.html`](public/includes.example.html) for the format.
-
-| Env var | Default | Purpose |
-| --- | --- | --- |
-| `LOCREPORT_INCLUDES_FILE` | `public/includes.html` | path to the head-includes file |
-| `LOCREPORT_CSP` | locked to `'self'` | override the document Content-Security-Policy |
-
-The default CSP is same-origin only, so an include that loads external or inline
-resources needs a matching `LOCREPORT_CSP` to be allowed.
-
-## Caching & performance
-
-By default the engine caches aggressively, so re-runs are near-instant:
-
-- **Persistent clone** — each repo is bare-cloned once into the cache and
-  refreshed with `git fetch` on later runs instead of re-cloning.
-- **Per-commit counts** — a commit is immutable, so its counted result is cached
-  keyed by `(counter, sha)`. Switching interval reuses every commit already seen
-  (e.g. a yearly run warms the cache for a later monthly run).
-- **Parallel counting** — cache misses are counted concurrently (~CPU count).
-
-Example (vuejs/core, yearly): cold ~10s, warm ~2s (all commits cached).
-
-Cache lives in `~/.cache/locreport` (override with `LOCREPORT_CACHE_DIR`). Pass
-`--no-cache` for a one-off fresh clone with no reuse. Cache entries are versioned
-and auto-invalidated when counting/classification semantics change; to wipe it
-manually, delete the cache directory.
-
-Cached bare clones are kept under a total size budget (`LOCREPORT_MAX_CACHE_MB`,
-default 5 GiB) and evicted **least-recently-used** when exceeded, so a public
-instance can't be made to fill its disk by requesting many distinct repos. Set
-it to `0` to disable eviction (unbounded growth).
-
-Eviction runs after each clone and never removes one that may be mid-analysis
-(it skips anything used within a grace window that always covers the analysis
-timeout). So it's a **soft cap**: under a burst of many distinct repos the cache
-can briefly exceed the budget before trimming — size it with headroom relative
-to the volume.
-
-The per-commit count, cohort and assembled-report files (small, but unbounded
-across many distinct repos) are **aged out** by a maintenance sweep: the web
-server runs it on startup and periodically (every 6h; `LOCREPORT_CACHE_SWEEP_MS`)
-and deletes derived files older than `LOCREPORT_CACHE_MAX_AGE_DAYS` (default 30,
-`0` disables), then trims the clones.
+To run it for others, see the [server guide](docs/operating.md).
 
 ## Counting backend
 
-Two interchangeable backends behind one interface (`src/counter.ts`):
+locreport has two counters:
 
-- **builtin** (default, zero-dependency) — a language-aware line counter covering
-  the most common languages. Always available.
-- **cloc** — if a [`cloc`](https://github.com/AlDanial/cloc) binary is on your
-  `PATH`, it is used automatically: ~250 languages and more precise comment
-  detection (it understands string literals; the builtin counter does not).
+- **builtin** (default) — works out of the box and covers common languages.
+- **cloc** — if [`cloc`](https://github.com/AlDanial/cloc) is on your `PATH`, it's
+  used automatically. It supports more languages and is more accurate.
 
 ```bash
-brew install cloc   # optional, recommended for accuracy
+brew install cloc   # optional, more accurate
 ```
 
 ## Development
 
 ```bash
-pnpm test          # run the suite (vitest)
+pnpm test          # run the tests
 pnpm test:watch
 pnpm typecheck
 ```
 
-Tests are hermetic — the end-to-end test builds a local git repo with backdated
-commits, so the suite needs no network and no GitHub access.
+The tests build a small local git repo, so they need no network or GitHub access.
 
-## Notes & limitations
+## Limitations
 
-- The builtin counter can misclassify comment tokens inside string literals;
-  install `cloc` for string-literal-aware counting.
-- The `build` vs `config` boundary is heuristic and the most debatable; edit
-  `DEFAULT_RULES` in `src/classifier.ts` to taste.
-- History follows `--first-parent` on a single branch.
+- The builtin counter can miscount comment-like text inside strings. Install
+  `cloc` to avoid this.
+- The line between `build` and `config` files is a judgment call; edit the rules
+  in `src/classifier.ts` to taste.
+- History follows the first parent of a single branch.
 
 ## License
 
