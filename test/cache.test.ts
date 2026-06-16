@@ -96,11 +96,18 @@ describe("cache eviction (prune)", () => {
     expect(await remaining()).toEqual(["mid.git", "recent.git"]);
   });
 
-  it("never evicts the keep dir or clones within the grace window", async () => {
+  it("never evicts clones within the grace window, even under pressure", async () => {
     await makeRepo("old", 1024, 60);
-    await makeRepo("fresh", 1024, 1); // within grace → protected even under pressure
+    await makeRepo("fresh", 1024, 1); // within grace → protected
     await openCache(dir, 1).prune(); // cap forces eviction of everything evictable
     expect(await remaining()).toEqual(["fresh.git"]);
+  });
+
+  it("never evicts the keep dir, even when it is the least-recently-used", async () => {
+    const kept = await makeRepo("old", 1024, 60); // LRU and past grace, but protected as keep
+    await makeRepo("newer", 1024, 30); // also past grace → the one that must go
+    await openCache(dir, 512).prune(kept); // cap forces eviction; keep dir must survive
+    expect(await remaining()).toEqual(["old.git"]);
   });
 
   it("does nothing when eviction is disabled (maxBytes = 0)", async () => {

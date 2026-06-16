@@ -41,8 +41,13 @@ function defaultMaxBytes(): number {
 }
 
 // Never evict a clone touched within this window — it is likely in use by an
-// in-flight analysis (comfortably above the default analysis timeout).
-const EVICT_GRACE_MS = 15 * 60_000;
+// in-flight analysis. The floor is 15 min, but it always covers the configured
+// analysis timeout so a long-running analysis can't have its clone evicted
+// mid-run (a concurrent prune only protects its own keep dir + this window).
+function evictGraceMs(): number {
+  const timeout = Number(process.env.LOCREPORT_ANALYSIS_TIMEOUT_MS);
+  return Math.max(15 * 60_000, Number.isFinite(timeout) && timeout > 0 ? timeout : 0);
+}
 
 /** Recursively sum the byte size of regular files under `dir` (0 if missing). */
 async function dirSize(dir: string): Promise<number> {
@@ -160,6 +165,7 @@ class DiskCache implements AnalysisCache {
     }
 
     const now = Date.now();
+    const grace = evictGraceMs();
     const keep = keepGitDir ? path.resolve(keepGitDir) : null;
     const repos: Array<{ full: string; size: number; mtimeMs: number }> = [];
     let total = 0;
@@ -181,7 +187,7 @@ class DiskCache implements AnalysisCache {
     // Evict least-recently-used first; never the just-used clone, nor one
     // touched within the grace window (likely mid-analysis).
     const evictable = repos
-      .filter((r) => path.resolve(r.full) !== keep && now - r.mtimeMs > EVICT_GRACE_MS)
+      .filter((r) => path.resolve(r.full) !== keep && now - r.mtimeMs > grace)
       .sort((a, b) => a.mtimeMs - b.mtimeMs);
     for (const r of evictable) {
       if (total <= this.maxBytes) break;

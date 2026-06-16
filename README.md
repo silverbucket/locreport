@@ -202,6 +202,12 @@ default 5 GiB) and evicted **least-recently-used** when exceeded, so a public
 instance can't be made to fill its disk by requesting many distinct repos. Set
 it to `0` to disable eviction (unbounded growth).
 
+Eviction runs after each clone and never removes one that may be mid-analysis
+(it skips anything used within a grace window that always covers the analysis
+timeout). So it's a **soft cap**: under a burst of many distinct repos the cache
+can briefly exceed the budget before trimming — size it with headroom relative
+to the volume.
+
 ## Counting backend
 
 Two interchangeable backends behind one interface (`src/counter.ts`):
