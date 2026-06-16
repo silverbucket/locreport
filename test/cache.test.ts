@@ -116,6 +116,46 @@ describe("report cache", () => {
   });
 });
 
+describe("cache sweep (age out derived files)", () => {
+  // Write a derived-cache file at `rel` with mtime `ageDays` in the past.
+  async function aged(rel: string, ageDays: number): Promise<string> {
+    const file = path.join(dir, rel);
+    await mkdir(path.dirname(file), { recursive: true });
+    await writeFile(file, "{}");
+    const t = new Date(Date.now() - ageDays * 24 * 60 * 60 * 1000);
+    await utimes(file, t, t);
+    return file;
+  }
+  const present = async (rel: string) =>
+    (await readdir(path.dirname(path.join(dir, rel)))).includes(path.basename(rel));
+
+  afterEach(() => {
+    delete process.env.LOCREPORT_CACHE_MAX_AGE_DAYS;
+  });
+
+  it("deletes snapshot/cohort/report files older than the max age, keeps fresh ones", async () => {
+    process.env.LOCREPORT_CACHE_MAX_AGE_DAYS = "30";
+    await aged("snapshots/builtin/old.json", 40);
+    await aged("snapshots/builtin/fresh.json", 1);
+    await aged("cohorts/old.json", 40);
+    await aged("reports/old.json", 40);
+    await aged("reports/fresh.json", 2);
+    await openCache(dir).sweep();
+    expect(await present("snapshots/builtin/old.json")).toBe(false);
+    expect(await present("snapshots/builtin/fresh.json")).toBe(true);
+    expect(await present("cohorts/old.json")).toBe(false);
+    expect(await present("reports/old.json")).toBe(false);
+    expect(await present("reports/fresh.json")).toBe(true);
+  });
+
+  it("does not age-sweep when disabled (max age = 0)", async () => {
+    process.env.LOCREPORT_CACHE_MAX_AGE_DAYS = "0";
+    await aged("snapshots/builtin/ancient.json", 365);
+    await openCache(dir).sweep();
+    expect(await present("snapshots/builtin/ancient.json")).toBe(true);
+  });
+});
+
 describe("cache eviction (prune)", () => {
   // Fake bare-clone dir holding a single file of `bytes`, last-used `ageMin` ago.
   async function makeRepo(name: string, bytes: number, ageMin: number): Promise<string> {

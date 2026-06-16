@@ -167,6 +167,8 @@ limits, all env-overridable (see `docker-compose.yml`):
 | `LOCREPORT_RATE_MAX` / `LOCREPORT_RATE_WINDOW_MS` | 30 / 60000 | per-IP rate limit |
 | `LOCREPORT_MAX_REPO_MB` | 2048 | reject bare repos larger than this |
 | `LOCREPORT_MAX_CACHE_MB` | 5120 | total cached-clone budget, LRU-evicted (0 disables) |
+| `LOCREPORT_CACHE_MAX_AGE_DAYS` | 30 | age out cached snapshots/cohorts/reports (0 disables) |
+| `LOCREPORT_CACHE_SWEEP_MS` | 21600000 | how often the server runs cache maintenance (6h) |
 | `LOCREPORT_GIT_TIMEOUT_MS` | 300000 | per git operation |
 | `LOCREPORT_ANALYSIS_TIMEOUT_MS` | 600000 | per analysis |
 | `LOCREPORT_TRUST_PROXY` | off | trust `X-Forwarded-For` for the client IP (enable only behind a proxy) |
@@ -240,6 +242,12 @@ Eviction runs after each clone and never removes one that may be mid-analysis
 timeout). So it's a **soft cap**: under a burst of many distinct repos the cache
 can briefly exceed the budget before trimming — size it with headroom relative
 to the volume.
+
+The per-commit count, cohort and assembled-report files (small, but unbounded
+across many distinct repos) are **aged out** by a maintenance sweep: the web
+server runs it on startup and periodically (every 6h; `LOCREPORT_CACHE_SWEEP_MS`)
+and deletes derived files older than `LOCREPORT_CACHE_MAX_AGE_DAYS` (default 30,
+`0` disables), then trims the clones.
 
 ## Counting backend
 
