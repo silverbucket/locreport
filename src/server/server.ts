@@ -5,7 +5,7 @@ import { fileURLToPath } from "node:url";
 import { analyzeRepo } from "../analyze.js";
 import { isInterval } from "../intervals.js";
 import type { Interval } from "../types.js";
-import { BusyError, clientIp, loadLimits, RateLimiter, Semaphore } from "./limits.js";
+import { BusyError, clientIp, InFlightTracker, loadLimits, RateLimiter, Semaphore } from "./limits.js";
 
 const ROOT = path.resolve(fileURLToPath(new URL("../..", import.meta.url)));
 const PUBLIC_DIR = path.join(ROOT, "public");
@@ -99,6 +99,7 @@ interface Gate {
   limits: ReturnType<typeof loadLimits>;
   semaphore: Semaphore;
   rateLimiter: RateLimiter;
+  perIp: InFlightTracker;
 }
 
 function withTimeout<T>(promise: Promise<T>, ms: number, message: string): Promise<T> {
@@ -137,52 +138,66 @@ async function handleAnalyze(req: IncomingMessage, res: ServerResponse, url: URL
     return;
   }
 
+  const ip = clientIp(req, gate.limits.trustProxy);
+
   // Per-IP rate limit.
-  if (!gate.rateLimiter.allow(clientIp(req, gate.limits.trustProxy), Date.now())) {
+  if (!gate.rateLimiter.allow(ip, Date.now())) {
     sse(res, "fail", { message: "Rate limit exceeded. Please slow down and try again shortly." });
     res.end();
     return;
   }
 
-  // Bounded concurrency (with a small queue).
-  let release: (() => void) | null = null;
-  try {
-    release = await gate.semaphore.acquire();
-  } catch (err) {
-    if (err instanceof BusyError) {
-      sse(res, "fail", { message: err.message });
-      res.end();
-      return;
-    }
-    throw err;
+  // Per-IP in-flight cap: one client can't occupy every slot and flood the
+  // queue. Counts running + queued analyses for this IP; released in finally.
+  if (!gate.perIp.tryEnter(ip, gate.limits.maxPerIp)) {
+    sse(res, "fail", { message: "Too many analyses in progress from your address. Let one finish and try again." });
+    res.end();
+    return;
   }
 
   try {
-    const report = await withTimeout(
-      analyzeRepo(repo, {
-        interval,
-        branch,
-        byPackage,
-        cohort,
-        maxRepoMb: gate.limits.maxRepoMb,
-        onProgress: (e) => {
-          if (!closed) sse(res, "progress", e);
-        },
-      }),
-      gate.limits.analysisTimeoutMs,
-      "Analysis timed out.",
-    );
-    if (!closed) {
-      sse(res, "done", report);
-      res.end();
+    // Bounded concurrency (with a small queue).
+    let release: (() => void) | null = null;
+    try {
+      release = await gate.semaphore.acquire();
+    } catch (err) {
+      if (err instanceof BusyError) {
+        sse(res, "fail", { message: err.message });
+        res.end();
+        return;
+      }
+      throw err;
     }
-  } catch (err) {
-    if (!closed) {
-      sse(res, "fail", { message: (err as Error).message });
-      res.end();
+
+    try {
+      const report = await withTimeout(
+        analyzeRepo(repo, {
+          interval,
+          branch,
+          byPackage,
+          cohort,
+          maxRepoMb: gate.limits.maxRepoMb,
+          onProgress: (e) => {
+            if (!closed) sse(res, "progress", e);
+          },
+        }),
+        gate.limits.analysisTimeoutMs,
+        "Analysis timed out.",
+      );
+      if (!closed) {
+        sse(res, "done", report);
+        res.end();
+      }
+    } catch (err) {
+      if (!closed) {
+        sse(res, "fail", { message: (err as Error).message });
+        res.end();
+      }
+    } finally {
+      release();
     }
   } finally {
-    release();
+    gate.perIp.exit(ip);
   }
 }
 
@@ -194,6 +209,7 @@ export function createServer(): Server {
     limits,
     semaphore: new Semaphore(limits.maxConcurrent, limits.maxQueue),
     rateLimiter: new RateLimiter(limits.rateMax, limits.rateWindowMs),
+    perIp: new InFlightTracker(),
   };
 
   return createHttpServer((req, res) => {

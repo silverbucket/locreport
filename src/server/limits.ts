@@ -13,6 +13,7 @@ export interface Limits {
   maxRepoMb: number;
   gitTimeoutMs: number;
   trustProxy: boolean;
+  maxPerIp: number;
 }
 
 function num(name: string, fallback: number): number {
@@ -34,7 +35,37 @@ export function loadLimits(): Limits {
     maxRepoMb: num("LOCREPORT_MAX_REPO_MB", 2048),
     gitTimeoutMs: num("LOCREPORT_GIT_TIMEOUT_MS", 300_000),
     trustProxy: bool("LOCREPORT_TRUST_PROXY"),
+    maxPerIp: num("LOCREPORT_MAX_PER_IP", 2),
   };
+}
+
+/**
+ * Tracks how many analyses each client (IP) currently has in the system —
+ * running or queued — so one client can't occupy every slot and flood the
+ * queue, starving others. Keyed identically to the rate limiter.
+ */
+export class InFlightTracker {
+  private counts = new Map<string, number>();
+
+  /** Reserve a slot for `key` if under `max`; returns false (rejected) if not. */
+  tryEnter(key: string, max: number): boolean {
+    const n = this.counts.get(key) ?? 0;
+    if (n >= max) return false;
+    this.counts.set(key, n + 1);
+    return true;
+  }
+
+  /** Release a previously-entered slot. */
+  exit(key: string): void {
+    const n = this.counts.get(key);
+    if (n === undefined) return;
+    if (n <= 1) this.counts.delete(key);
+    else this.counts.set(key, n - 1);
+  }
+
+  inFlight(key: string): number {
+    return this.counts.get(key) ?? 0;
+  }
 }
 
 /** Thrown by Semaphore.acquire when the queue is full. */

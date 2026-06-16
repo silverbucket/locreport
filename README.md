@@ -150,7 +150,8 @@ limits, all env-overridable (see `docker-compose.yml`):
 
 | Env var | Default | Purpose |
 | --- | --- | --- |
-| `LOCREPORT_MAX_CONCURRENT` | 2 | simultaneous analyses |
+| `LOCREPORT_MAX_CONCURRENT` | 2 | simultaneous analyses (server-wide) |
+| `LOCREPORT_MAX_PER_IP` | 2 | simultaneous analyses per client IP (running + queued) |
 | `LOCREPORT_MAX_QUEUE` | 10 | waiters before "server busy" |
 | `LOCREPORT_RATE_MAX` / `LOCREPORT_RATE_WINDOW_MS` | 30 / 60000 | per-IP rate limit |
 | `LOCREPORT_MAX_REPO_MB` | 2048 | reject bare repos larger than this |
@@ -163,11 +164,18 @@ These complement the built-in **github.com-only** guard (an SSRF safeguard,
 since the server clones whatever URL it's given). Put a TLS-terminating reverse
 proxy in front for public exposure.
 
-The rate limiter keys on the client IP. By default it uses the socket peer
-address and **ignores `X-Forwarded-For`**, since a directly-exposed server would
-otherwise let any client spoof the header and mint unlimited buckets. When you
-run behind a trusted reverse proxy that sets `X-Forwarded-For`, set
-**`LOCREPORT_TRUST_PROXY=1`** so the real client IP (the first hop) is used.
+The rate limiter and the per-IP cap both key on the client IP. By default the
+server uses the socket peer address and **ignores `X-Forwarded-For`**, since a
+directly-exposed server would otherwise let any client spoof the header and mint
+unlimited buckets. When you run behind a trusted reverse proxy that sets
+`X-Forwarded-For`, set **`LOCREPORT_TRUST_PROXY=1`** so the real client IP (the
+first hop) is used — otherwise every request shares the proxy's address and the
+per-IP limits apply to all users at once.
+
+`LOCREPORT_MAX_PER_IP` caps how many analyses one client can have running or
+queued at once, so a single client can't occupy every slot and fill the queue.
+It's a no-op at the default `MAX_CONCURRENT=2`, but becomes the fairness control
+once you raise concurrency for a busier instance.
 
 `LOCREPORT_MAX_REPO_MB` is enforced **twice**: once before cloning (via a GitHub
 API size lookup) and again after, as a backstop. The pre-clone check is
