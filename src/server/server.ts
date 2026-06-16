@@ -3,6 +3,7 @@ import { createServer as createHttpServer, type IncomingMessage, type Server, ty
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { analyzeRepo } from "../analyze.js";
+import { openCache } from "../cache.js";
 import { isInterval } from "../intervals.js";
 import type { Interval } from "../types.js";
 import { BusyError, clientIp, InFlightTracker, loadLimits, RateLimiter, Semaphore } from "./limits.js";
@@ -256,4 +257,13 @@ if (isMain) {
   createServer().listen(port, () => {
     process.stdout.write(`locreport web UI → http://localhost:${port}\n`);
   });
+
+  // Maintain the cache on a schedule (not just opportunistically after a clone):
+  // age out derived files and trim clones on startup, then periodically. unref'd
+  // so it never keeps the process alive. Best-effort — sweep errors are ignored.
+  const cache = openCache();
+  const sweepMs = Math.max(60_000, Number(process.env.LOCREPORT_CACHE_SWEEP_MS) || 6 * 60 * 60 * 1000);
+  const runSweep = () => void cache.sweep().catch(() => {});
+  runSweep();
+  setInterval(runSweep, sweepMs).unref();
 }

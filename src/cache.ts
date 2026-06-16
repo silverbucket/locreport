@@ -55,6 +55,18 @@ function evictGraceMs(): number {
   return Math.max(15 * 60_000, Number.isFinite(timeout) && timeout > 0 ? timeout : 0);
 }
 
+// Max age for derived cache files (snapshots / cohorts / reports) before the
+// sweep deletes them. 0 disables the age sweep. Default 30 days.
+function defaultMaxAgeMs(): number {
+  const days = Number(process.env.LOCREPORT_CACHE_MAX_AGE_DAYS);
+  return (Number.isFinite(days) && days >= 0 ? days : 30) * 24 * 60 * 60 * 1000;
+}
+
+// Memoized bare-clone sizes — module-scoped so the per-analysis cache instances
+// share it — keyed by dir, invalidated when the clone's mtime changes (i.e. it
+// was fetched or re-cloned). Avoids re-walking every clone on each prune.
+const repoSizeMemo = new Map<string, { mtimeMs: number; size: number }>();
+
 /** Recursively sum the byte size of regular files under `dir` (0 if missing). */
 async function dirSize(dir: string): Promise<number> {
   let total = 0;
@@ -76,6 +88,27 @@ async function dirSize(dir: string): Promise<number> {
     }
   }
   return total;
+}
+
+/** Recursively delete regular files under `dir` whose mtime is before `cutoff`. */
+async function sweepOldFiles(dir: string, cutoff: number): Promise<void> {
+  let entries: Dirent[];
+  try {
+    entries = await readdir(dir, { withFileTypes: true });
+  } catch {
+    return; // dir doesn't exist yet
+  }
+  for (const e of entries) {
+    const full = path.join(dir, e.name);
+    if (e.isDirectory()) await sweepOldFiles(full, cutoff);
+    else if (e.isFile()) {
+      try {
+        if ((await stat(full)).mtimeMs < cutoff) await rm(full, { force: true });
+      } catch {
+        // raced removal — ignore
+      }
+    }
+  }
 }
 
 async function exists(p: string): Promise<boolean> {
@@ -117,6 +150,8 @@ export interface AnalysisCache {
   setReport(key: string, head: string, report: Report): Promise<void>;
   /** Evict least-recently-used bare clones until under the size budget. */
   prune(keepGitDir?: string): Promise<void>;
+  /** Age out derived files (snapshots/cohorts/reports) and trim clones. */
+  sweep(): Promise<void>;
 }
 
 class DiskCache implements AnalysisCache {
@@ -195,12 +230,20 @@ class DiskCache implements AnalysisCache {
     for (const e of entries) {
       if (!e.isDirectory()) continue;
       const full = path.join(this.reposDir(), e.name);
-      const size = await dirSize(full);
       let mtimeMs = now;
       try {
         mtimeMs = (await stat(full)).mtimeMs;
       } catch {
         // raced removal — treat as fresh so we don't fight another pruner
+      }
+      // Reuse the memoized size unless the clone changed (fetch/reclone bumps mtime).
+      const memo = repoSizeMemo.get(full);
+      let size: number;
+      if (memo && memo.mtimeMs === mtimeMs) {
+        size = memo.size;
+      } else {
+        size = await dirSize(full);
+        repoSizeMemo.set(full, { mtimeMs, size });
       }
       total += size;
       repos.push({ full, size, mtimeMs });
@@ -215,8 +258,22 @@ class DiskCache implements AnalysisCache {
     for (const r of evictable) {
       if (total <= this.maxBytes) break;
       await rm(r.full, { recursive: true, force: true });
+      repoSizeMemo.delete(r.full);
       total -= r.size;
     }
+  }
+
+  async sweep(): Promise<void> {
+    // Age out derived files (snapshots / cohorts / reports) so they don't grow
+    // without bound across many distinct repos, then trim the bare clones.
+    const maxAgeMs = defaultMaxAgeMs();
+    if (maxAgeMs > 0) {
+      const cutoff = Date.now() - maxAgeMs;
+      for (const sub of ["snapshots", "cohorts", "reports"]) {
+        await sweepOldFiles(path.join(this.root, sub), cutoff);
+      }
+    }
+    await this.prune();
   }
 
   async getSnapshot(counter: string, sha: string): Promise<CommitCounts | null> {
