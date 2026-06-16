@@ -12,11 +12,16 @@ export interface Limits {
   analysisTimeoutMs: number;
   maxRepoMb: number;
   gitTimeoutMs: number;
+  trustProxy: boolean;
 }
 
 function num(name: string, fallback: number): number {
   const v = Number(process.env[name]);
   return Number.isFinite(v) && v > 0 ? v : fallback;
+}
+
+function bool(name: string): boolean {
+  return ["1", "true", "yes", "on"].includes((process.env[name] ?? "").trim().toLowerCase());
 }
 
 export function loadLimits(): Limits {
@@ -28,6 +33,7 @@ export function loadLimits(): Limits {
     analysisTimeoutMs: num("LOCREPORT_ANALYSIS_TIMEOUT_MS", 600_000),
     maxRepoMb: num("LOCREPORT_MAX_REPO_MB", 2048),
     gitTimeoutMs: num("LOCREPORT_GIT_TIMEOUT_MS", 300_000),
+    trustProxy: bool("LOCREPORT_TRUST_PROXY"),
   };
 }
 
@@ -105,9 +111,19 @@ export class RateLimiter {
   }
 }
 
-/** Best-effort client IP (first X-Forwarded-For hop when behind a proxy). */
-export function clientIp(req: IncomingMessage): string {
-  const xff = req.headers["x-forwarded-for"];
-  const first = Array.isArray(xff) ? xff[0] : xff?.split(",")[0];
-  return (first?.trim() || req.socket.remoteAddress || "unknown").replace(/^::ffff:/, "");
+/**
+ * Best-effort client IP, used as the rate-limit key.
+ *
+ * `X-Forwarded-For` is honored ONLY when `trustProxy` is set — otherwise any
+ * client could spoof the header and mint unlimited rate-limit buckets, defeating
+ * the limiter. Enable it only when running behind a trusted reverse proxy that
+ * overwrites the header. Default off → use the socket peer address.
+ */
+export function clientIp(req: IncomingMessage, trustProxy = false): string {
+  if (trustProxy) {
+    const xff = req.headers["x-forwarded-for"];
+    const first = Array.isArray(xff) ? xff[0] : xff?.split(",")[0];
+    if (first?.trim()) return first.trim().replace(/^::ffff:/, "");
+  }
+  return (req.socket.remoteAddress || "unknown").replace(/^::ffff:/, "");
 }
