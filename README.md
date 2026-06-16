@@ -157,11 +157,17 @@ limits, all env-overridable (see `docker-compose.yml`):
 | `LOCREPORT_MAX_CACHE_MB` | 5120 | total cached-clone budget, LRU-evicted (0 disables) |
 | `LOCREPORT_GIT_TIMEOUT_MS` | 300000 | per git operation |
 | `LOCREPORT_ANALYSIS_TIMEOUT_MS` | 600000 | per analysis |
+| `LOCREPORT_TRUST_PROXY` | off | trust `X-Forwarded-For` for the client IP (enable only behind a proxy) |
 
 These complement the built-in **github.com-only** guard (an SSRF safeguard,
 since the server clones whatever URL it's given). Put a TLS-terminating reverse
-proxy in front for public exposure; `X-Forwarded-For` is honored for rate
-limiting.
+proxy in front for public exposure.
+
+The rate limiter keys on the client IP. By default it uses the socket peer
+address and **ignores `X-Forwarded-For`**, since a directly-exposed server would
+otherwise let any client spoof the header and mint unlimited buckets. When you
+run behind a trusted reverse proxy that sets `X-Forwarded-For`, set
+**`LOCREPORT_TRUST_PROXY=1`** so the real client IP (the first hop) is used.
 
 `LOCREPORT_MAX_REPO_MB` is enforced **twice**: once before cloning (via a GitHub
 API size lookup) and again after, as a backstop. The pre-clone check is

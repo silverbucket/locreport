@@ -138,7 +138,7 @@ async function handleAnalyze(req: IncomingMessage, res: ServerResponse, url: URL
   }
 
   // Per-IP rate limit.
-  if (!gate.rateLimiter.allow(clientIp(req), Date.now())) {
+  if (!gate.rateLimiter.allow(clientIp(req, gate.limits.trustProxy), Date.now())) {
     sse(res, "fail", { message: "Rate limit exceeded. Please slow down and try again shortly." });
     res.end();
     return;

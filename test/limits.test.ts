@@ -83,12 +83,16 @@ describe("RateLimiter", () => {
 });
 
 describe("clientIp", () => {
-  it("prefers the first X-Forwarded-For hop and strips ipv6 mapping", () => {
-    const req = { headers: { "x-forwarded-for": "203.0.113.7, 10.0.0.1" }, socket: {} } as never;
-    expect(clientIp(req)).toBe("203.0.113.7");
-  });
-  it("falls back to the socket address", () => {
-    const req = { headers: {}, socket: { remoteAddress: "::ffff:192.168.1.5" } } as never;
+  it("ignores X-Forwarded-For by default (spoof-proof) and uses the socket address", () => {
+    const req = { headers: { "x-forwarded-for": "203.0.113.7" }, socket: { remoteAddress: "::ffff:192.168.1.5" } } as never;
     expect(clientIp(req)).toBe("192.168.1.5");
+  });
+  it("honors the first X-Forwarded-For hop only when trustProxy is set", () => {
+    const req = { headers: { "x-forwarded-for": "203.0.113.7, 10.0.0.1" }, socket: { remoteAddress: "10.0.0.9" } } as never;
+    expect(clientIp(req, true)).toBe("203.0.113.7");
+  });
+  it("falls back to the socket address when trustProxy is set but no header is present", () => {
+    const req = { headers: {}, socket: { remoteAddress: "::ffff:192.168.1.5" } } as never;
+    expect(clientIp(req, true)).toBe("192.168.1.5");
   });
 });

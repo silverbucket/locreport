@@ -20,6 +20,7 @@ services:
       # LOCREPORT_MAX_CACHE_MB: "5120"   # total cached-clone budget (LRU-evicted; 0 disables)
       # LOCREPORT_GIT_TIMEOUT_MS: "300000"
       # LOCREPORT_ANALYSIS_TIMEOUT_MS: "600000"
+      # LOCREPORT_TRUST_PROXY: "1"       # trust X-Forwarded-For (only behind a trusted proxy)
       # Optional: raises the GitHub API rate limit for the pre-clone size check
       # (unauthenticated is 60/hr per IP). Public read only; no scopes needed.
       # GITHUB_TOKEN: "ghp_..."
